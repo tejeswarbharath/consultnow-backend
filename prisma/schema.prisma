@@ -23,6 +23,7 @@ model User {
   id        String   @id @default(uuid())
   name      String
   email     String   @unique
+  password  String
   timezone  String?  // Helpful for calendar scheduling later
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -35,6 +36,7 @@ model Expert {
   photoUrl         String?  // Optional image placeholder
   name             String
   email            String   @unique // For accept/reject notifications
+  password         String
   yearsExperience Int
   pricePerHour     Decimal  // Calculated and displayed later
   subjectExpertise String[] // Array of specific expertise (e.g., ['Calculus', 'Physics'])

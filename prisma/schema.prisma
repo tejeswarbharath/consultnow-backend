@@ -6,7 +6,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL") // We will populate this in the next step
 }
 
 // 2. Define the core data models

@@ -1,0 +1,47 @@
+// prisma/schema.prisma
+// 1. Configure the database connection
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // We will populate this in the next step
+}
+
+// 2. Define the core data models
+
+// Core Categories for the services (e.g., Tutoring, Medical Advice)
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique // The unique name of the service
+  description String?  // Optional description
+  experts     Expert[] // Relationship to Experts in this category
+}
+
+// Client Users (seeking consulting)
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  timezone  String?  // Helpful for calendar scheduling later
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // Add other client-specific fields if needed (e.g., bookedSessions)
+}
+
+// Professional Experts (providing consulting)
+model Expert {
+  id               String   @id @default(uuid())
+  photoUrl         String?  // Optional image placeholder
+  name             String
+  email            String   @unique // For accept/reject notifications
+  yearsExperience Int
+  pricePerHour     Decimal  // Calculated and displayed later
+  subjectExpertise String[] // Array of specific expertise (e.g., ['Calculus', 'Physics'])
+  isAvailable      Boolean  @default(true) // For presence status
+  
+  // Relationships
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+}

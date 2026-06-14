@@ -1,0 +1,34 @@
+{
+  "name": "consultnow-backend",
+  "version": "1.0.0",
+  "description": "consult now is an application where you can contact your favorite professional expert and resolve your pending queries",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tejeswarbharath/consultnow-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/tejeswarbharath/consultnow-backend/issues"
+  },
+  "homepage": "https://github.com/tejeswarbharath/consultnow-backend#readme",
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.2",
+    "prisma": "^7.8.0"
+  }
+}

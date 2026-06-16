@@ -16,8 +16,8 @@ const prisma = new PrismaClient({ adapter });
 // Add this to your .env file later: JWT_SECRET="your_secure_random_string"
 const JWT_SECRET = process.env.JWT_SECRET || 'consultnow_development_secret';
 
-// 1. CLIENT REGISTRATION ROUTE
-router.post('/register/client', async (req, res) => {
+// 1. REGISTRATION ROUTE
+router.post('/register', async (req, res) => {
   const { name, email, password, timezone } = req.body;
 
   try {
@@ -42,6 +42,7 @@ router.post('/register/client', async (req, res) => {
 
     res.status(201).json({ message: 'Client registered successfully', userId: newUser.id });
   } catch (error) {
+    console.error('Registration Error:', error);
     res.status(500).json({ error: 'Server error during registration' });
   }
 });
@@ -79,6 +80,7 @@ router.post('/login', async (req, res) => {
 
     res.json({ message: 'Login successful', token, role });
   } catch (error) {
+    console.error('Login Error:', error);
     res.status(500).json({ error: 'Server error during login' });
   }
 });

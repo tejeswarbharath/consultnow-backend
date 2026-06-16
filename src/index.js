@@ -1,4 +1,6 @@
 // src/index.js
+require('dotenv').config(); // Ensure env vars are loaded
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -6,7 +8,6 @@ const authRoutes = require('./routes/auth');
 const expertRoutes = require('./routes/experts');
 const paymentRoutes = require('./routes/payment.routes');
 const { initSocket } = require('./socket');
-require('dotenv').config(); // Ensure env vars are loaded
 
 const app = express();
 const server = http.createServer(app);

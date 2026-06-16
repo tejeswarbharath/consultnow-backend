@@ -33,9 +33,6 @@ router.get('/', async (req, res) => {
 
     const experts = await prisma.expert.findMany({
       where: whereClause,
-      include: {
-        category: true, // Include category details if needed by frontend
-      },
       select: {
         id: true,
         name: true,

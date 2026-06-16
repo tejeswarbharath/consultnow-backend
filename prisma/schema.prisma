@@ -46,3 +46,18 @@ model Expert {
   category   Category @relation(fields: [categoryId], references: [id])
   categoryId String
 }
+
+// Payment Transactions
+model Transaction {
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  paymentId     String?  @unique
+  signature     String?
+  amount        Int      // in subunit (paise/cents)
+  currency      String   @default("INR")
+  status        String   @default("CREATED") // CREATED, PAID, FAILED
+  userId        String?
+  expertId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const authRoutes = require('./routes/auth');
 const expertRoutes = require('./routes/experts');
+const paymentRoutes = require('./routes/payment.routes');
 const { initSocket } = require('./socket');
 require('dotenv').config(); // Ensure env vars are loaded
 
@@ -20,6 +21,7 @@ app.use(express.json()); // Allows Express to read JSON data from requests
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/experts', expertRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

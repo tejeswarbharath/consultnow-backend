@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { createCheckoutSession } = require('../../../../controllers/payment.controller');
+const { createOrder, verifyPayment } = require('../controller/payment.controller');
 
-// POST /api/create-checkout-session
-// NOTE: You may want to add your JWT authMiddleware here to protect this route
-router.post('/create-checkout-session', createCheckoutSession);
+// POST /api/payment/create-order
+router.post('/create-order', createOrder);
+
+// POST /api/payment/verify
+router.post('/verify', verifyPayment);
 
 module.exports = router;

@@ -32,8 +32,7 @@
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.21.0",
     "razorpay": "^2.9.6",
-    "socket.io": "^4.8.3",
-    "stripe": "^22.2.1"
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "nodemon": "^3.1.2",

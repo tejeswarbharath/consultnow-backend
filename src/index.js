@@ -7,6 +7,7 @@ const http = require('http');
 const authRoutes = require('./routes/auth');
 const expertRoutes = require('./routes/experts');
 const paymentRoutes = require('./routes/payment.routes');
+const aiRoutes = require('./routes/ai');
 const { initSocket } = require('./socket');
 
 const app = express();
@@ -23,6 +24,7 @@ app.use(express.json()); // Allows Express to read JSON data from requests
 app.use('/api/auth', authRoutes);
 app.use('/api/experts', expertRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

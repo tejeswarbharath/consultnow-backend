@@ -5,8 +5,6 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 /**
  * Get the generative model
- * @param {string} modelName - The name of the model to use
- * @returns {object} The generative model instance
  */
 const getModel = (modelName = 'gemini-2.5-flash') => {
   if (!process.env.GEMINI_API_KEY) {
@@ -16,9 +14,39 @@ const getModel = (modelName = 'gemini-2.5-flash') => {
 };
 
 /**
+ * Helper: Delay execution
+ */
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Helper: Execute Gemini call with Exponential Backoff
+ */
+const generateWithRetry = async (model, prompt, maxRetries = 3) => {
+  let baseDelay = 2000; // Start with a 2-second delay
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const result = await model.generateContent(prompt);
+      return await result.response;
+    } catch (error) {
+      const isRateLimit = error.status === 429 || 
+                          (error.message && error.message.toLowerCase().includes('too high')) ||
+                          (error.message && error.message.toLowerCase().includes('overloaded'));
+
+      if (isRateLimit && i < maxRetries - 1) {
+        console.warn(`[ConsultNow AI] Traffic high. Retrying in ${baseDelay / 1000}s... (Attempt ${i + 1} of ${maxRetries})`);
+        await delay(baseDelay);
+        baseDelay *= 2; // Double the wait time for the next attempt
+      } else {
+        // If it's not a rate limit error, or we've run out of retries, throw it.
+        throw error; 
+      }
+    }
+  }
+};
+
+/**
  * Triage user's problem to recommend an expert category
- * @param {string} problemDescription - User's problem description
- * @returns {Promise<string>} Structured AI response recommending a category
  */
 const triageProblem = async (problemDescription) => {
   const model = getModel();
@@ -30,15 +58,13 @@ const triageProblem = async (problemDescription) => {
     Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
   `;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
+  // Use the retry wrapper instead of calling model directly
+  const response = await generateWithRetry(model, prompt);
   return response.text();
 };
 
 /**
  * Generate marketing bio and snippet for an expert
- * @param {object} expertDetails - Basic expert details and skills
- * @returns {Promise<object>} Generated bio and marketing snippet
  */
 const generateMarketing = async (skills) => {
   const model = getModel();
@@ -54,17 +80,15 @@ const generateMarketing = async (skills) => {
     Do not wrap the JSON in markdown blocks like \`\`\`json.
   `;
 
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
+  // Use the retry wrapper instead of calling model directly
+  const response = await generateWithRetry(model, prompt);
   let text = response.text();
   
-  // Clean up potential markdown formatting from the AI response
   text = text.replace(/^```json\n/, '').replace(/\n```$/, '').trim();
   
   try {
     return JSON.parse(text);
   } catch (error) {
-    // Fallback if AI doesn't return perfect JSON
     return {
       bio: text,
       marketingSnippet: "Professional services available."

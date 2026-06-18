@@ -29,7 +29,7 @@ router.post('/generate-marketing', async (req, res) => {
       return res.status(400).json({ error: 'Skills details are required.' });
     }
 
-    const marketingMaterial = await aiService.generateMarketingMaterial(skills);
+    const marketingMaterial = await aiService.generateMarketing(skills);
     res.json(marketingMaterial);
   } catch (error) {
     console.error('Error in /generate-marketing:', error);

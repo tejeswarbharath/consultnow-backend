@@ -41,6 +41,8 @@ model Expert {
   pricePerHour     Decimal  // Calculated and displayed later
   subjectExpertise String[] // Array of specific expertise (e.g., ['Calculus', 'Physics'])
   isAvailable      Boolean  @default(true) // For presence status
+  bio              String?
+  marketingSnippet String?
   
   // Relationships
   category   Category @relation(fields: [categoryId], references: [id])

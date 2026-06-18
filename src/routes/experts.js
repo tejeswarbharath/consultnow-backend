@@ -77,6 +77,7 @@ router.get('/:id', async (req, res) => {
       select: {
         id: true,
         name: true,
+        email: true,
         photoUrl: true,
         yearsExperience: true,
         pricePerHour: true,
@@ -84,6 +85,8 @@ router.get('/:id', async (req, res) => {
         isAvailable: true,
         categoryId: true,
         category: true,
+        bio: true,
+        marketingSnippet: true,
       }
     });
 
@@ -95,6 +98,28 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error fetching expert:', error);
     res.status(500).json({ error: 'Failed to fetch expert' });
+  }
+});
+
+// PUT /api/experts/:id
+// Update expert profile (bio and marketing snippet)
+router.put('/:id', async (req, res) => {
+  const { id } = req.params;
+  const { bio, marketingSnippet } = req.body;
+
+  try {
+    const expert = await prisma.expert.update({
+      where: { id },
+      data: {
+        bio,
+        marketingSnippet,
+      },
+    });
+
+    res.json({ message: 'Expert profile updated successfully', expert });
+  } catch (error) {
+    console.error('Error updating expert profile:', error);
+    res.status(500).json({ error: 'Failed to update expert profile' });
   }
 });
 

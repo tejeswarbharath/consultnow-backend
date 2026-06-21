@@ -16,71 +16,45 @@ router.get('/', async (req, res) => {
   const { categoryId, search, subjectExpertise, groupBy } = req.query;
 
   try {
-    if (groupBy === 'subjectExpertise') {
-        const experts = await prisma.expert.findMany({
-            where: {
-                isAvailable: true,
-            },
-            select: {
-                id: true,
-                name: true,
-                photoUrl: true,
-                yearsExperience: true,
-                pricePerHour: true,
-                subjectExpertise: true,
-                isAvailable: true,
-                categoryId: true,
-                category: true,
-            }
-        });
-        const grouped = experts.reduce((acc, expert) => {
-            const key = expert.subjectExpertise;
-            if (!acc[key]) {
-                acc[key] = [];
-            }
-            acc[key].push(expert);
-            return acc;
-        }, {});
-        return res.json(grouped);
-    }
-
-
-    const whereClause = {
-      isAvailable: true, // Only show available experts in the discovery by default
-    };
-
-    if (categoryId) {
-      whereClause.categoryId = categoryId;
-    }
-
-    if (subjectExpertise) {
-        whereClause.subjectExpertise = subjectExpertise;
-    }
-
-    if (search) {
-      whereClause.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { subjectExpertise: { contains: search, mode: 'insensitive' } }
-      ];
-    }
-
+    // 1. Fetch all available experts (removed categoryId and category)
     const experts = await prisma.expert.findMany({
-      where: whereClause,
+      where: {
+        isAvailable: true
+      },
       select: {
         id: true,
         name: true,
         photoUrl: true,
         yearsExperience: true,
         pricePerHour: true,
-        subjectExpertise: true,
+        subjectExpertise: true, // We rely entirely on this now
         isAvailable: true,
-        categoryId: true,
-        category: true,
-        // email and password are omitted for security
+        bio: true,
+        marketingSnippet: true
+        // ❌ categoryId: true (REMOVED)
+        // ❌ category: true (REMOVED)
       }
     });
 
+    // 2. Group the data for the frontend based on the new string field
+    if (groupBy === 'subjectExpertise') {
+      const groupedExperts = experts.reduce((acc, expert) => {
+        // Group by the string value (e.g., "Medical Advice", "IT Career Guidance")
+        const categoryName = expert.subjectExpertise; 
+        
+        if (!acc[categoryName]) {
+          acc[categoryName] = [];
+        }
+        acc[categoryName].push(expert);
+        return acc;
+      }, {});
+
+      return res.json(groupedExperts);
+    }
+
+    // 3. Return flat list if no grouping is requested
     res.json(experts);
+    
   } catch (error) {
     console.error('Error fetching experts:', error);
     res.status(500).json({ error: 'Failed to fetch experts' });
@@ -116,8 +90,6 @@ router.get('/:id', async (req, res) => {
         pricePerHour: true,
         subjectExpertise: true,
         isAvailable: true,
-        categoryId: true,
-        category: true,
         bio: true,
         marketingSnippet: true,
       }

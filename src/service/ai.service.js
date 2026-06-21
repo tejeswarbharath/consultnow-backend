@@ -4,7 +4,15 @@ const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');
 
 const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
+
+// FIX 1: Added SSL configuration to silence the libpq-ssl warning required by Neon Tech DBs
+const pool = new Pool({ 
+  connectionString,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
@@ -14,7 +22,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 /**
  * Get the generative model
  */
-const getModel = (modelName = 'gemini-1.5-flash') => {
+const getModel = (modelName = 'gemini-2.5-flash') => {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not defined in the environment variables.");
   }
@@ -54,6 +62,7 @@ const generateWithRetry = async (model, prompt, maxRetries = 3) => {
 };
 
 /**
+ * FIX 2: Restored the triageProblem function that was missing
  * Triage user's problem to recommend an expert category
  */
 const triageProblem = async (problemDescription) => {
@@ -66,7 +75,6 @@ const triageProblem = async (problemDescription) => {
     Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
   `;
 
-  // Use the retry wrapper instead of calling model directly
   const response = await generateWithRetry(model, prompt);
   return response.text();
 };
@@ -88,16 +96,24 @@ const generateMarketing = async (skills, expertId) => {
     Do not wrap the JSON in markdown blocks like \`\`\`json.
   `;
 
-  // Use the retry wrapper instead of calling model directly
   const response = await generateWithRetry(model, prompt);
   let text = response.text();
   
   text = text.replace(/^```json\n/, '').replace(/\n```$/, '').trim();
   
-  try {
-    const marketingMaterial = JSON.parse(text);
+  let marketingMaterial;
 
-    // Save the generated content to the expert's profile
+  try {
+    marketingMaterial = JSON.parse(text);
+  } catch (error) {
+    console.warn("Failed to parse Gemini response as JSON. Falling back to raw text.", error);
+    marketingMaterial = {
+      bio: text,
+      marketingSnippet: "Professional services available."
+    };
+  }
+
+  try {
     await prisma.expert.update({
       where: { id: expertId },
       data: {
@@ -105,24 +121,14 @@ const generateMarketing = async (skills, expertId) => {
         marketingSnippet: marketingMaterial.marketingSnippet
       }
     });
-
     return marketingMaterial;
-  } catch (error) {
-    // If parsing fails, we can still save the raw text to the bio
-    await prisma.expert.update({
-        where: { id: expertId },
-        data: {
-            bio: text,
-            marketingSnippet: "Professional services available."
-        }
-    });
-    return {
-      bio: text,
-      marketingSnippet: "Professional services available."
-    };
+  } catch (dbError) {
+    console.error("Database update failed inside generateMarketing:", dbError);
+    throw new Error("Failed to save generated marketing profile to database.");
   }
 };
 
+// FIX 3: Ensure both functions are correctly exported
 module.exports = {
   triageProblem,
   generateMarketing

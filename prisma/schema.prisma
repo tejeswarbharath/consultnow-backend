@@ -1,43 +1,39 @@
 // prisma/schema.prisma
-// 1. Configure the database connection
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // NOTE: The 'url' property has been removed here to comply with Prisma v7.
-  // The CLI uses prisma.config.ts, and the app uses the PrismaPg adapter.
 }
-
-// 2. Define the core data models
 
 // Professional Experts (providing consulting)
 model Expert {
-  id              String  @id @default(uuid())
-  photoUrl        String?
-  name            String
-  email           String  @unique
-  password        String
-  yearsExperience Int
-  pricePerHour    Float
-
-  subjectExpertise String
-  isAvailable      Boolean @default(true)
+  id               String   @id @default(uuid())
+  photoUrl         String?
+  name             String
+  email            String   @unique 
+  password         String
+  yearsExperience  Int
+  pricePerHour     Float
+  currency         String   @default("INR") // NEW: Currency Flexibility
+  
+  subjectExpertise String 
+  isAvailable      Boolean  @default(true) 
   bio              String?
   marketingSnippet String?
 }
 
 // Payment Transactions
 model Transaction {
-  id        String   @id @default(uuid())
-  orderId   String   @unique
-  paymentId String?  @unique
-  signature String?
-  amount    Int // in subunit (paise/cents)
-  currency  String   @default("INR")
-  status    String   @default("CREATED") // CREATED, PAID, FAILED
-  expertId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  orderId       String   @unique
+  paymentId     String?  @unique
+  signature     String?
+  amount        Int      // in subunit (paise/cents)
+  currency      String   @default("INR") // Already supports dynamic currency
+  status        String   @default("CREATED") // CREATED, PAID, FAILED
+  expertId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

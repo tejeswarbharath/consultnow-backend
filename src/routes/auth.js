@@ -9,75 +9,72 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 const router = express.Router();
 
 const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
+const pool = new Pool({ 
+  connectionString,
+  ssl: { rejectUnauthorized: false }
+});
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-// Add this to your .env file later: JWT_SECRET="your_secure_random_string"
 const JWT_SECRET = process.env.JWT_SECRET || 'consultnow_development_secret';
 
-// 1. REGISTRATION ROUTE
+// REGISTRATION ROUTE
 router.post('/register', async (req, res) => {
-  const { name, email, password, yearsExperience, pricePerHour, subjectExpertise, categoryId } = req.body;
+  // Extract currency from the payload
+  const { name, email, password, yearsExperience, pricePerHour, subjectExpertise, currency } = req.body;
 
   try {
-    // Check if expert already exists
     const existingExpert = await prisma.expert.findUnique({ where: { email } });
     if (existingExpert) {
-      return res.status(400).json({ error: 'Email already in use' });
+      return res.status(400).json({ error: 'Email already registered' });
     }
 
-    // Hash the password securely
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create the expert in the database
-    const newExpert = await prisma.expert.create({
+    const expert = await prisma.expert.create({
       data: {
         name,
         email,
         password: hashedPassword,
-        yearsExperience: parseInt(yearsExperience),
+        yearsExperience: Number(yearsExperience),
         pricePerHour: parseFloat(pricePerHour),
         subjectExpertise,
-        categoryId
+        currency: currency || 'INR' // Save specific currency or fallback to INR
       }
     });
 
-    res.status(201).json({ message: 'Expert registered successfully', expertId: newExpert.id });
+    res.status(201).json({ message: 'Expert registered successfully', expertId: expert.id });
   } catch (error) {
-    console.error('Registration Error:', error);
-    res.status(500).json({ error: 'Server error during registration' });
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
   }
 });
 
-// 2. LOGIN ROUTE (For Experts)
+// LOGIN ROUTE
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const account = await prisma.expert.findUnique({ where: { email } });
-
-    if (!account) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    const expert = await prisma.expert.findUnique({ where: { email } });
+    if (!expert) {
+      return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    // Compare the provided password with the hashed password in DB
-    const isPasswordValid = await bcrypt.compare(password, account.password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    const isValidPassword = await bcrypt.compare(password, expert.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ error: 'Invalid credentials' });
     }
 
-    // Generate a secure JSON Web Token (JWT)
     const token = jwt.sign(
-      { id: account.id, email: account.email, role: 'expert' },
+      { expertId: expert.id, email: expert.email },
       JWT_SECRET,
-      { expiresIn: '24h' } // Token expires in 1 day
+      { expiresIn: '24h' }
     );
 
-    res.json({ message: 'Login successful', token, role: 'expert' });
+    res.json({ token, expert: { id: expert.id, name: expert.name, email: expert.email } });
   } catch (error) {
-    console.error('Login Error:', error);
-    res.status(500).json({ error: 'Server error during login' });
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 

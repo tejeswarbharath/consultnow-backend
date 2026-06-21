@@ -1,66 +1,74 @@
 const { google } = require('googleapis');
 
-// Configure the Google OAuth2 client
-// In production, these should securely come from your Google Cloud Console
+// Initialize OAuth2 Client using your environment variables
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   process.env.GOOGLE_REDIRECT_URI
 );
 
-// Provide a system-level refresh token or dynamically fetch it based on your setup
+// Set the refresh token so the API never logs you out
 oauth2Client.setCredentials({
   refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
 });
 
+// Initialize the Calendar API
 const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
 /**
- * Schedules a Google Meet session 24 hours from now for a 1-hour slot.
- * @param {string} userEmail - User's email
- * @param {string} expertEmail - Expert's email
- * @param {string} serviceDetails - Title/Description of the service
+ * Creates a calendar event with an auto-generated Google Meet link
  */
-const scheduleGoogleMeet = async (userEmail, expertEmail, serviceDetails) => {
+const createMeeting = async (expertEmail, guestEmail, summary, description) => {
   try {
-    // Calculate start time: 24 hours from now
+    // For this implementation, we will schedule the meeting 24 hours from the current time.
+    // In a future update, you could map this to a specific time slot selected by the user on the frontend.
     const startTime = new Date();
-    startTime.setDate(startTime.getDate() + 1);
-
-    // Calculate end time: 1 hour after start
+    startTime.setHours(startTime.getHours() + 24); 
     const endTime = new Date(startTime);
-    endTime.setHours(startTime.getHours() + 1);
+    endTime.setHours(startTime.getHours() + 1); // 1 Hour duration
+
+    // Generate a unique ID for the Google Meet creation request
+    const requestId = "consultnow_" + Math.random().toString(36).substring(2, 15);
 
     const event = {
-      summary: `ConsultNow: ${serviceDetails}`,
-      description: 'Automatically scheduled consultation following successful payment checkout.',
-      start: { dateTime: startTime.toISOString(), timeZone: 'UTC' },
-      end: { dateTime: endTime.toISOString(), timeZone: 'UTC' },
-      attendees: [{ email: userEmail }, { email: expertEmail }],
+      summary: summary,
+      description: description,
+      start: {
+        dateTime: startTime.toISOString(),
+        timeZone: 'Asia/Kolkata', 
+      },
+      end: {
+        dateTime: endTime.toISOString(),
+        timeZone: 'Asia/Kolkata',
+      },
+      attendees: [
+        { email: expertEmail },
+        { email: guestEmail }
+      ],
       conferenceData: {
         createRequest: {
-          requestId: `consultnow-meet-${Date.now()}`,
-          conferenceSolutionKey: { type: 'hangoutsMeet' },
-        },
-      },
+          requestId: requestId,
+          conferenceSolutionKey: { type: 'hangoutsMeet' }
+        }
+      }
     };
 
-    // Insert the event into the primary calendar & notify attendees
+    // Push the event to Google Calendar
     const response = await calendar.events.insert({
       calendarId: 'primary',
       resource: event,
-      conferenceDataVersion: 1,
-      sendUpdates: 'all', // Send email invitations to attendees via Google
+      conferenceDataVersion: 1, // MUST be 1 to generate the Meet link
     });
 
-    console.log(`Google Meet scheduled: ${response.data.hangoutLink}`);
-    return response.data;
+    console.log('[ConsultNow Calendar] Event created successfully! Meet Link:', response.data.hangoutLink);
+    return response.data.hangoutLink;
+
   } catch (error) {
-    console.error('Error creating Google Calendar event:', error);
-    throw new Error('Failed to schedule calendar event');
+    console.error('[ConsultNow Calendar] Error creating Google Calendar meeting:', error);
+    throw new Error('Failed to generate Google Meet link.');
   }
 };
 
-module.exports = {
-  scheduleGoogleMeet
+module.exports = { 
+  createMeeting 
 };

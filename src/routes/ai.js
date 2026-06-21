@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const aiService = require('../service/ai.service');
+const { authenticateToken } = require('../middleware/auth');
 
 // POST /api/ai/triage
 router.post('/triage', async (req, res) => {
@@ -20,16 +21,16 @@ router.post('/triage', async (req, res) => {
 });
 
 // POST /api/ai/generate-marketing
-// Note: Depending on your module structure, you should add your authentication middleware here to protect this route
-router.post('/generate-marketing', async (req, res) => {
+router.post('/generate-marketing', authenticateToken, async (req, res) => {
   try {
     const { skills } = req.body;
+    const expertId = req.user.id;
     
     if (!skills) {
       return res.status(400).json({ error: 'Skills details are required.' });
     }
 
-    const marketingMaterial = await aiService.generateMarketing(skills);
+    const marketingMaterial = await aiService.generateMarketing(skills, expertId);
     res.json(marketingMaterial);
   } catch (error) {
     console.error('Error in /generate-marketing:', error);

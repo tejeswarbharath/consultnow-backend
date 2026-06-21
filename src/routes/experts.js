@@ -13,9 +13,38 @@ const prisma = new PrismaClient({ adapter });
 // GET /api/experts
 // Fetch experts with optional filtering by categoryId and search by name or subject
 router.get('/', async (req, res) => {
-  const { categoryId, search } = req.query;
+  const { categoryId, search, subjectExpertise, groupBy } = req.query;
 
   try {
+    if (groupBy === 'subjectExpertise') {
+        const experts = await prisma.expert.findMany({
+            where: {
+                isAvailable: true,
+            },
+            select: {
+                id: true,
+                name: true,
+                photoUrl: true,
+                yearsExperience: true,
+                pricePerHour: true,
+                subjectExpertise: true,
+                isAvailable: true,
+                categoryId: true,
+                category: true,
+            }
+        });
+        const grouped = experts.reduce((acc, expert) => {
+            const key = expert.subjectExpertise;
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(expert);
+            return acc;
+        }, {});
+        return res.json(grouped);
+    }
+
+
     const whereClause = {
       isAvailable: true, // Only show available experts in the discovery by default
     };
@@ -24,10 +53,14 @@ router.get('/', async (req, res) => {
       whereClause.categoryId = categoryId;
     }
 
+    if (subjectExpertise) {
+        whereClause.subjectExpertise = subjectExpertise;
+    }
+
     if (search) {
       whereClause.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { subjectExpertise: { has: search } }
+        { subjectExpertise: { contains: search, mode: 'insensitive' } }
       ];
     }
 

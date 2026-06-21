@@ -18,18 +18,6 @@ model Category {
   experts     Expert[] // Relationship to Experts in this category
 }
 
-// Client Users (seeking consulting)
-model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  timezone  String?  // Helpful for calendar scheduling later
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  // Add other client-specific fields if needed (e.g., bookedSessions)
-}
-
 // Professional Experts (providing consulting)
 model Expert {
   id               String   @id @default(uuid())
@@ -38,8 +26,8 @@ model Expert {
   email            String   @unique // For accept/reject notifications
   password         String
   yearsExperience Int
-  pricePerHour     Decimal  // Calculated and displayed later
-  subjectExpertise String[] // Array of specific expertise (e.g., ['Calculus', 'Physics'])
+  pricePerHour     Float
+  subjectExpertise String // "Student Tutoring Services", "Medical Advice", "IT Career Guidance", "Legal Advice", "HR Services"
   isAvailable      Boolean  @default(true) // For presence status
   bio              String?
   marketingSnippet String?

@@ -1,4 +1,12 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { PrismaClient } = require('@prisma/client');
+const { Pool } = require('pg');
+const { PrismaPg } = require('@prisma/adapter-pg');
+
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 // Initialize the Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -6,7 +14,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 /**
  * Get the generative model
  */
-const getModel = (modelName = 'gemini-2.5-flash') => {
+const getModel = (modelName = 'gemini-1.5-flash') => {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not defined in the environment variables.");
   }
@@ -66,7 +74,7 @@ const triageProblem = async (problemDescription) => {
 /**
  * Generate marketing bio and snippet for an expert
  */
-const generateMarketing = async (skills) => {
+const generateMarketing = async (skills, expertId) => {
   const model = getModel();
   const prompt = `
     An expert has the following skills and background:
@@ -87,8 +95,27 @@ const generateMarketing = async (skills) => {
   text = text.replace(/^```json\n/, '').replace(/\n```$/, '').trim();
   
   try {
-    return JSON.parse(text);
+    const marketingMaterial = JSON.parse(text);
+
+    // Save the generated content to the expert's profile
+    await prisma.expert.update({
+      where: { id: expertId },
+      data: {
+        bio: marketingMaterial.bio,
+        marketingSnippet: marketingMaterial.marketingSnippet
+      }
+    });
+
+    return marketingMaterial;
   } catch (error) {
+    // If parsing fails, we can still save the raw text to the bio
+    await prisma.expert.update({
+        where: { id: expertId },
+        data: {
+            bio: text,
+            marketingSnippet: "Professional services available."
+        }
+    });
     return {
       bio: text,
       marketingSnippet: "Professional services available."

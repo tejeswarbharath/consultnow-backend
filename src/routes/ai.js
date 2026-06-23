@@ -24,17 +24,21 @@ router.post('/triage', async (req, res) => {
 router.post('/generate-marketing', authenticateToken, async (req, res) => {
   try {
     const { skills } = req.body;
-    const expertId = req.user.id;
     
-    if (!skills) {
-      return res.status(400).json({ error: 'Skills details are required.' });
+    // FIX: Extract 'expertId' exactly as it was signed in the JWT during login
+    const expertId = req.user.expertId; 
+    
+    if (!expertId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing expertId in token' });
     }
 
+    // Call the service, which updates the DB and returns the JSON
     const marketingMaterial = await aiService.generateMarketing(skills, expertId);
+    
     res.json(marketingMaterial);
   } catch (error) {
-    console.error('Error in /generate-marketing:', error);
-    res.status(500).json({ error: 'Failed to generate marketing material.' });
+    console.error('Error generating marketing:', error);
+    res.status(500).json({ error: 'Failed to generate marketing content' });
   }
 });
 

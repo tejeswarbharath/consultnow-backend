@@ -66,17 +66,27 @@ const generateWithRetry = async (model, prompt, maxRetries = 3) => {
  * Triage user's problem to recommend an expert category
  */
 const triageProblem = async (problemDescription) => {
-  const model = getModel();
-  const prompt = `
-    A user has the following problem:
-    "${problemDescription}"
-    
-    Recommend a specific expert category (e.g., Legal, IT, Medical, Financial, Mental Health, Career Coaching) that would be most suitable to help with this problem.
-    Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
-  `;
+  try{
+    const model = getModel();
+    const prompt = `
+      A user has the following problem:
+      "${problemDescription}"
+      
+      Recommend a specific expert category (e.g., Legal, IT, Medical, Financial, Mental Health, Career Coaching) that would be most suitable to help with this problem.
+      Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
+    `;
 
-  const response = await generateWithRetry(model, prompt);
-  return response.text();
+    const response = await generateWithRetry(model, prompt);
+    return response.text();
+  } catch (error) {
+    console.error("AI Triage Failed due to 503 High Demand or Timeout. Providing fallback:", error.message);
+    
+    // Graceful fallback to prevent frontend crashes when Google is down
+    return {
+      category: "General Support",
+      reason: "Our AI is currently experiencing high traffic. A general support expert will review your query and assist you shortly."
+    };
+  }
 };
 
 /**

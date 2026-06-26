@@ -50,6 +50,18 @@ const sendBookingConfirmation = async (guestEmail, guestName, expertName, meetLi
   }
 };
 
+const verifySmtpConnection = async () => {
+  try {
+    await transporter.verify();
+    console.log('[ConsultNow Email] SMTP Connection has been verified');
+    return true;
+  } catch (error) {
+    console.error('[ConsultNow Email] SMTP Connection verification failed:', error);
+    return false;
+  }
+};
+
 module.exports = {
-  sendBookingConfirmation
+  sendBookingConfirmation,
+  verifySmtpConnection
 };

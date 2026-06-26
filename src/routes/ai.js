@@ -42,4 +42,16 @@ router.post('/generate-marketing', authenticateToken, async (req, res) => {
   }
 });
 
+const { verifySmtpConnection } = require('../service/email.service');
+
+// GET /api/ai/verify-email
+router.get('/verify-email', async (req, res) => {
+  const isConnected = await verifySmtpConnection();
+  if (isConnected) {
+    res.status(200).send('SMTP connection is verified.');
+  } else {
+    res.status(500).send('SMTP connection verification failed.');
+  }
+});
+
 module.exports = router;

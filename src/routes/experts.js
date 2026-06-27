@@ -1,14 +1,7 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
-const { Pool } = require('pg');
-const { PrismaPg } = require('@prisma/adapter-pg');
+const prisma = require('../prisma');
 
 const router = express.Router();
-
-const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
 
 // GET /api/experts
 // Fetch experts with optional filtering by categoryId and search by name or subject

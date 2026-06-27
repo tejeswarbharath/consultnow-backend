@@ -9,31 +9,59 @@ datasource db {
 
 // Professional Experts (providing consulting)
 model Expert {
-  id               String   @id @default(uuid())
+  id               String    @id @default(uuid())
   photoUrl         String?
   name             String
-  email            String   @unique 
+  email            String    @unique
   password         String
   yearsExperience  Int
   pricePerHour     Float
-  currency         String   @default("INR") // NEW: Currency Flexibility
-  
-  subjectExpertise String 
-  isAvailable      Boolean  @default(true) 
+  currency         String    @default("INR") // NEW: Currency Flexibility
+  subjectExpertise String
+  isAvailable      Boolean   @default(true)
   bio              String?
   marketingSnippet String?
+  bookings         Booking[]
 }
 
 // Payment Transactions
 model Transaction {
-  id            String   @id @default(uuid())
-  orderId       String   @unique
-  paymentId     String?  @unique
-  signature     String?
-  amount        Int      // in subunit (paise/cents)
-  currency      String   @default("INR") // Already supports dynamic currency
-  status        String   @default("CREATED") // CREATED, PAID, FAILED
-  expertId      String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  paymentId String?  @unique
+  signature String?
+  amount    Int      // in subunit (paise/cents)
+  currency  String   @default("INR") // Already supports dynamic currency
+  status    String   @default("CREATED") // CREATED, PAID, FAILED
+  expertId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  email     String    @unique
+  password  String
+  timezone  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookings  Booking[]
+}
+
+model Booking {
+  id        String    @id @default(uuid())
+  status    String
+  type      String
+  details   String?
+  startTime DateTime?
+  endTime   DateTime?
+  expert    Expert    @relation(fields: [expertId], references: [id])
+  expertId  String
+  user      User?     @relation(fields: [userId], references: [id])
+  userId    String?
+  guestName String?
+  guestEmail String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

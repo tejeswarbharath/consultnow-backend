@@ -1,20 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { PrismaClient } = require('@prisma/client');
-const { Pool } = require('pg');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const connectionString = process.env.DATABASE_URL;
-
-// FIX 1: Added SSL configuration to silence the libpq-ssl warning required by Neon Tech DBs
-const pool = new Pool({ 
-  connectionString,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
-
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = require('../prisma');
 
 // Initialize the Gemini client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');

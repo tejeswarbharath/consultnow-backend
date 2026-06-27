@@ -1,21 +1,10 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const { PrismaClient } = require('@prisma/client');
-const { Pool } = require('pg');
-const { PrismaPg } = require('@prisma/adapter-pg');
+const prisma = require('../prisma');
 
 // Import our new Module 6 services!
 const { sendBookingConfirmation } = require('../service/email.service');
 const { createMeeting } = require('../service/calendar.service');
-
-// Initialize Neon Database Connection
-const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ 
-  connectionString,
-  ssl: { rejectUnauthorized: false }
-});
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
 
 let razorpay;
 if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -85,7 +74,15 @@ const verifyPayment = async (req, res) => {
     return res.status(503).json({ error: 'Payment gateway is not configured.' });
   }
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, guestData, expertId } = req.body;
+    const { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      razorpay_signature, 
+      guestData, 
+      expertId,
+      startTime,
+      endTime 
+    } = req.body;
 
     // Verify digital signature
     const body = razorpay_order_id + "|" + razorpay_payment_id;
@@ -115,7 +112,7 @@ const verifyPayment = async (req, res) => {
     });
 
     // ---------------------------------------------------------
-    // POST-PAYMENT AUTOMATION: Google Calendar & Email Dispatch
+    // POST-PAYMENT AUTOMATION: Create Booking, Google Calendar & Email Dispatch
     // ---------------------------------------------------------
     try {
       // 1. Fetch Expert details from the database
@@ -125,13 +122,27 @@ const verifyPayment = async (req, res) => {
       });
 
       if (expert) {
+        // 2. Create the Booking record for the paid session
+        await prisma.booking.create({
+          data: {
+            expertId: expertId,
+            status: 'PAID',
+            type: 'PAID_1_HOUR',
+            details: guestData.problem,
+            startTime: startTime,
+            endTime: endTime,
+            guestName: guestData.name,
+            guestEmail: guestData.email
+          }
+        });
+        
         const summary = `ConsultNow Session: ${guestData.name} & ${expert.name}`;
         const desc = `Problem Description provided by guest: ${guestData.problem || 'No description provided.'}`;
 
-        // 2. Automatically generate the Google Meet Link
-        const meetLink = await createMeeting(expert.email, guestData.email, summary, desc);
+        // 3. Automatically generate the Google Meet Link with the correct time
+        const meetLink = await createMeeting(expert.email, guestData.email, summary, desc, startTime, endTime);
 
-        // 3. Dispatch the HTML confirmation email to the guest containing the link
+        // 4. Dispatch the HTML confirmation email to the guest containing the link
         await sendBookingConfirmation(guestData.email, guestData.name, expert.name, meetLink);
       }
     } catch (automationError) {

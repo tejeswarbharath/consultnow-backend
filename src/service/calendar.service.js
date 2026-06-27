@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const prisma = require('../prisma');
 
 // --- Pre-boot validation for Google Calendar Integration ---
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
@@ -11,6 +12,10 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
       console.error("[ConsultNow Calendar] SKIPPED: 'createMeeting' was called, but the service is disabled due to missing credentials.");
       // Return a dummy link or null to ensure consuming services don't crash
       return "https://meet.google.com/mock-link-credentials-missing"; 
+    },
+    getAvailability: async () => {
+      console.error("[ConsultNow Calendar] SKIPPED: 'getAvailability' was called, but the service is disabled due to missing credentials.");
+      return [];
     }
   };
 
@@ -35,14 +40,15 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
   /**
    * Creates a calendar event with an auto-generated Google Meet link
    */
-  const createMeeting = async (expertEmail, guestEmail, summary, description) => {
+  const createMeeting = async (expertEmail, guestEmail, summary, description, startTime, endTime) => {
     try {
-      // For this implementation, we will schedule the meeting 24 hours from the current time.
-      // In a future update, you could map this to a specific time slot selected by the user on the frontend.
-      const startTime = new Date();
-      startTime.setHours(startTime.getHours() + 24); 
-      const endTime = new Date(startTime);
-      endTime.setHours(startTime.getHours() + 1); // 1 Hour duration
+      // If startTime or endTime are not provided, default to 24 hours from now.
+      if (!startTime || !endTime) {
+        startTime = new Date();
+        startTime.setHours(startTime.getHours() + 24); 
+        endTime = new Date(startTime);
+        endTime.setHours(startTime.getHours() + 1); // 1 Hour duration
+      }
 
       // Generate a unique ID for the Google Meet creation request
       const requestId = "consultnow_" + Math.random().toString(36).substring(2, 15);
@@ -51,11 +57,11 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
         summary: summary,
         description: description,
         start: {
-          dateTime: startTime.toISOString(),
+          dateTime: new Date(startTime).toISOString(),
           timeZone: 'Asia/Kolkata', 
         },
         end: {
-          dateTime: endTime.toISOString(),
+          dateTime: new Date(endTime).toISOString(),
           timeZone: 'Asia/Kolkata',
         },
         attendees: [
@@ -86,7 +92,55 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
     }
   };
 
+  const getAvailability = async (expertId) => {
+    const expert = await prisma.expert.findUnique({ where: { id: expertId } });
+    if (!expert) {
+      throw new Error('Expert not found');
+    }
+
+    const workingHours = {
+      start: 9, // 9 AM
+      end: 17, // 5 PM
+    };
+
+    const now = new Date();
+    const endDate = new Date();
+    endDate.setDate(now.getDate() + 7);
+
+    const bookings = await prisma.booking.findMany({
+      where: {
+        expertId: expertId,
+        startTime: {
+          gte: now,
+          lt: endDate,
+        },
+      },
+    });
+
+    const availableSlots = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date();
+      day.setDate(now.getDate() + i);
+      for (let hour = workingHours.start; hour < workingHours.end; hour++) {
+        const slot = new Date(day);
+        slot.setHours(hour, 0, 0, 0);
+
+        const isBooked = bookings.some(booking => {
+          const bookingStart = new Date(booking.startTime);
+          return bookingStart.getTime() === slot.getTime();
+        });
+
+        if (!isBooked && slot > now) {
+          availableSlots.push(slot);
+        }
+      }
+    }
+
+    return availableSlots;
+  };
+
   module.exports = { 
-    createMeeting 
+    createMeeting,
+    getAvailability
   };
 }

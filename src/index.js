@@ -6,6 +6,7 @@ const cors = require('cors');
 const http = require('http');
 const authRoutes = require('./routes/auth');
 const expertRoutes = require('./routes/experts');
+const bookingRoutes = require('./routes/booking.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const aiRoutes = require('./routes/ai');
 const { initSocket } = require('./socket');
@@ -23,6 +24,7 @@ app.use(express.json()); // Allows Express to read JSON data from requests
 // Mount Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/experts', expertRoutes);
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/ai', aiRoutes);
 

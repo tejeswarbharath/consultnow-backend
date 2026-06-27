@@ -61,7 +61,26 @@ const verifySmtpConnection = async () => {
   }
 };
 
+const sendEmail = async (to, subject, html) => {
+  const mailOptions = {
+    from: `"ConsultNow" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[ConsultNow Email] Email sent to:', to, 'Message ID:', info.messageId);
+    return info;
+  } catch (error) {
+    console.error('[ConsultNow Email] Error sending email:', error);
+    throw new Error('Failed to send email.');
+  }
+};
+
 module.exports = {
+  sendEmail,
   sendBookingConfirmation,
   verifySmtpConnection
 };

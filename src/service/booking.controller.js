@@ -1,35 +1,38 @@
 const { sendEmail } = require('../service/email.service');
-const { PrismaClient } = require('@prisma/client');
-const { Pool } = require('pg');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const { createMeeting, getAvailability } = require('../service/calendar.service');
+const prisma = require('../prisma');
 
 const requestFreeService = async (req, res) => {
   try {
-    const { expertId, serviceDetails } = req.body;
+    const { expertId, serviceDetails, startTime, endTime, guestData } = req.body;
+    
+    if (!startTime || !endTime) {
+      return res.status(400).json({ error: 'A time slot must be selected for the booking.' });
+    }
+
     // Assuming you have auth middleware that attaches the logged-in user to req.user
-    const userId = req.user?.id || 'guest-user-id'; 
+    const userId = req.user?.id || null; 
 
     // 1. Fetch Expert to get their email
     const expert = await prisma.expert.findUnique({ where: { id: expertId } });
     if (!expert) return res.status(404).json({ error: 'Expert not found' });
 
-    // 2. Create the Booking record (Assumes a Booking model in Prisma)
+    // 2. Create the Booking record
     const booking = await prisma.booking.create({
       data: {
         expertId,
         userId,
         status: 'PENDING',
         type: 'FREE_1_HOUR',
-        details: serviceDetails || 'Requesting 1 hour of free expert service'
+        details: serviceDetails || 'Requesting 1 hour of free expert service',
+        startTime,
+        endTime,
+        guestName: guestData?.name,
+        guestEmail: guestData?.email
       }
     });
 
-    // 3. Construct functional Accept/Reject links (must be accessible from email client)
+    // 3. Construct functional Accept/Reject links
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
     const acceptLink = `${backendUrl}/api/bookings/accept/${booking.id}`;
     const rejectLink = `${backendUrl}/api/bookings/reject/${booking.id}`;
@@ -62,9 +65,42 @@ const acceptBooking = async (req, res) => {
     const booking = await prisma.booking.update({
       where: { id },
       data: { status: 'ACCEPTED' },
-      include: { expert: true }
+      include: { user: true, expert: true }
     });
-    
+
+    // Create a Google Meet link
+    const meetingLink = await createMeeting(
+      booking.expert.email,
+      booking.user?.email || booking.guestEmail,
+      'Consultation Session',
+      booking.details,
+      booking.startTime,
+      booking.endTime
+    );
+
+    // Determine the user's email (registered or guest)
+    const userEmail = booking.user?.email || booking.guestEmail;
+
+    // Send confirmation email to the user/guest
+    if (userEmail) {
+      const userSubject = 'Your Consultation is Confirmed!';
+      const userHtml = `
+        <h2>Booking Confirmed</h2>
+        <p>Your 1-hour consultation with <strong>${booking.expert.name}</strong> has been confirmed.</p>
+        <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
+      `;
+      await sendEmail(userEmail, userSubject, userHtml);
+    }
+
+    // Send notification email to the expert
+    const expertSubject = 'You Have Accepted a Consultation';
+    const expertHtml = `
+      <h2>Consultation Accepted</h2>
+      <p>You have confirmed the 1-hour consultation with <strong>${booking.user?.name || booking.guestName || 'a guest user'}</strong>.</p>
+      <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
+    `;
+    await sendEmail(booking.expert.email, expertSubject, expertHtml);
+
     // Redirect the expert to a frontend success/dashboard page
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
     res.redirect(`${frontendUrl}/dashboard?status=accepted&bookingId=${id}`);
@@ -84,11 +120,14 @@ const rejectBooking = async (req, res) => {
       include: { user: true, expert: true }
     });
 
-    // According to Module 3 workflow: Send rejection email back to the User
-    if (booking.user?.email) {
+    // Determine the user's email (registered or guest)
+    const userEmail = booking.user?.email || booking.guestEmail;
+
+    // Send rejection email back to the User/Guest
+    if (userEmail) {
       const subject = 'Update: Consultation Request';
-      const html = `<p>The Professional Expert has rejected your Request for a free 1-hour service.</p>`;
-      await sendEmail(booking.user.email, subject, html);
+      const html = `<p>We're sorry, but the Professional Expert has rejected your request for a free 1-hour service. Please feel free to book with another expert.</p>`;
+      await sendEmail(userEmail, subject, html);
     }
 
     // Redirect the expert to a frontend confirmation page
@@ -100,8 +139,20 @@ const rejectBooking = async (req, res) => {
   }
 };
 
+const getExpertAvailability = async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    const availableSlots = await getAvailability(expertId);
+    res.json(availableSlots);
+  } catch (error) {
+    console.error('Error getting expert availability:', error);
+    res.status(500).json({ error: 'Failed to get expert availability' });
+  }
+};
+
 module.exports = {
   requestFreeService,
   acceptBooking,
-  rejectBooking
+  rejectBooking,
+  getExpertAvailability
 };

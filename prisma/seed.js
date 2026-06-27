@@ -1,16 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const { Pool } = require('pg');
-const { PrismaPg } = require('@prisma/adapter-pg');
-
-let connectionString = process.env.DATABASE_URL;
-// Fix the pg v9 warning by using libpq compatibility mode
-if (connectionString && connectionString.includes('sslmode=require')) {
-  connectionString = connectionString.replace('sslmode=require', 'uselibpqcompat=true&sslmode=require');
-}
-
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = require('../src/prisma');
 
 async function main() {
   console.log('Start seeding...');

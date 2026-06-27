@@ -57,7 +57,7 @@ const triageProblem = async (problemDescription) => {
       A user has the following problem:
       "${problemDescription}"
       
-      Recommend a specific expert category (e.g., Legal, IT, Medical, Financial, Mental Health, Career Coaching) that would be most suitable to help with this problem.
+      Recommend a specific expert category (e.g., Legal, IT, Medical, Student Tutoring, Career Coaching) that would be most suitable to help with this problem.
       Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
     `;
 

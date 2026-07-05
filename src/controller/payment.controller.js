@@ -101,6 +101,19 @@ const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Invalid payment signature. Payment rejected.' });
     }
 
+    // --- SECURITY ENHANCEMENT: Verify amount against your database record ---
+    const transactionFromDb = await prisma.transaction.findUnique({
+      where: { orderId: razorpay_order_id }
+    });
+
+    const razorpayOrderDetails = await razorpay.orders.fetch(razorpay_order_id);
+
+    if (razorpayOrderDetails.amount !== transactionFromDb.amount) {
+      // Handle amount mismatch - this is a critical security event.
+      console.error(`[SECURITY ALERT] Payment amount mismatch for order ${razorpay_order_id}. Expected ${transactionFromDb.amount}, got ${razorpayOrderDetails.amount}.`);
+      return res.status(400).json({ error: 'Payment amount mismatch. Verification failed.' });
+    }
+
     // Payment is verified! Mark as PAID
     const successfulTransaction = await prisma.transaction.update({
       where: { orderId: razorpay_order_id },

@@ -1,6 +1,9 @@
 const express = require('express');
 const prisma = require('../prisma');
 
+// Placeholder for authentication middleware. You would need to implement this.
+const { authMiddleware, isExpertOwner } = require('../middleware/auth'); // Assuming you create this
+
 const router = express.Router();
 
 // GET /api/experts
@@ -101,11 +104,16 @@ router.get('/:id', async (req, res) => {
 
 // PUT /api/experts/:id
 // Update expert profile (bio and marketing snippet)
-router.put('/:id', async (req, res) => {
+// This route should be protected to ensure only the authenticated expert can update their own profile.
+router.put('/:id', authMiddleware, isExpertOwner, async (req, res) => {
   const { id } = req.params;
   const { bio, marketingSnippet } = req.body;
 
   try {
+    // Add input validation here using a library like express-validator
+    if (typeof bio !== 'string' || typeof marketingSnippet !== 'string') {
+      return res.status(400).json({ error: 'Invalid input data.' });
+    }
     const expert = await prisma.expert.update({
       where: { id },
       data: {

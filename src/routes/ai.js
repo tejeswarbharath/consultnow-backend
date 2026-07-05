@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const aiService = require('../service/ai.service');
-const { authenticateToken } = require('../middleware/auth');
+const { authMiddleware } = require('../middleware/auth');
 
 // POST /api/ai/triage
 router.post('/triage', async (req, res) => {
@@ -21,7 +21,7 @@ router.post('/triage', async (req, res) => {
 });
 
 // POST /api/ai/generate-marketing
-router.post('/generate-marketing', authenticateToken, async (req, res) => {
+router.post('/generate-marketing', authMiddleware, async (req, res) => {
   try {
     const { skills } = req.body;
     

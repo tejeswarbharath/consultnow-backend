@@ -2,7 +2,7 @@
   "name": "consultnow-backend",
   "version": "1.0.0",
   "description": "consult now is an application where you can contact your favorite professional expert and resolve your pending queries",
-  "main": "index.js",
+  "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",

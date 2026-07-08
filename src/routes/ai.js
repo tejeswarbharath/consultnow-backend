@@ -12,11 +12,33 @@ router.post('/triage', async (req, res) => {
       return res.status(400).json({ error: 'Problem description is required.' });
     }
 
-    const category = await aiService.triageProblem(problemDescription);
-    res.json({ recommendedCategory: category });
+    const triageResult = await aiService.triageProblem(problemDescription);
+    res.json({
+      recommendedCategory: triageResult.category,
+      reason: triageResult.reason,
+      isEmergency: triageResult.isEmergency,
+      disclaimer: triageResult.disclaimer
+    });
   } catch (error) {
     console.error('Error in /triage:', error);
     res.status(500).json({ error: 'Failed to triage problem.' });
+  }
+});
+
+// POST /api/ai/expert-summaries
+router.post('/expert-summaries', async (req, res) => {
+  try {
+    const { query, experts } = req.body;
+    
+    if (!query || !experts || !Array.isArray(experts)) {
+      return res.status(400).json({ error: 'Query and experts array are required.' });
+    }
+
+    const summaries = await aiService.generateExpertSummaries(query, experts);
+    res.json({ summaries });
+  } catch (error) {
+    console.error('Error in /expert-summaries:', error);
+    res.status(500).json({ error: 'Failed to generate expert summaries.' });
   }
 });
 

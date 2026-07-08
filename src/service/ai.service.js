@@ -47,29 +47,67 @@ const generateWithRetry = async (model, prompt, maxRetries = 3) => {
 };
 
 /**
- * FIX 2: Restored the triageProblem function that was missing
- * Triage user's problem to recommend an expert category
+ * Triage user's problem to recommend an expert category and check for emergencies
  */
 const triageProblem = async (problemDescription) => {
-  try{
+  try {
     const model = getModel();
     const prompt = `
-      A user has the following problem:
+      You are an AI support agent for ConsultNow, a professional services platform.
+      The platform has 5 categories of expert services:
+      1. "Student Tutoring Services" - for academic support, tutoring, and homework for grades 1-10.
+      2. "Medical Advice" - for general health, wellness, and non-emergency medical queries.
+      3. "IT Career Guidance" - for tech career advice, transitions, and mentorship.
+      4. "Legal Advice" - for general legal information, rights, and clarification.
+      5. "HR Services" - for workplace policy, disputes, and HR best practices.
+
+      A user typed the following problem description:
       "${problemDescription}"
-      
-      Recommend a specific expert category (e.g., Legal, IT, Medical, Student Tutoring, Career Coaching) that would be most suitable to help with this problem.
-      Keep your response short and structured. State the recommended category clearly and provide a brief 1-2 sentence reason why.
+
+      Tasks:
+      1. Classify the problem into one of the 5 categories above. Choose the closest match.
+      2. Determine if this is a high-risk emergency.
+         - For "Medical Advice": check if there is an emergency, severe trauma, life-threatening symptoms (e.g., chest pain, shortness of breath, severe bleeding, loss of consciousness, suicidal thoughts or self-harm).
+         - For "Legal Advice": check if there is an immediate legal emergency (e.g., active arrest, search warrant, jail, immediate physical safety danger).
+      3. Generate a brief 1-2 sentence reason for your classification.
+
+      Return the response STRICTLY as a JSON object with the following keys. Do NOT wrap the JSON in markdown blocks like \`\`\`json or \`\`\`:
+      {
+        "category": "One of the 5 exact category names listed above",
+        "reason": "Brief reason why",
+        "isEmergency": true or false,
+        "disclaimer": "Emergency warning message if isEmergency is true, otherwise empty string"
+      }
     `;
 
     const response = await generateWithRetry(model, prompt);
-    return response.text();
-  } catch (error) {
-    console.error("AI Triage Failed due to 503 High Demand or Timeout. Providing fallback:", error.message);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
     
-    // Graceful fallback to prevent frontend crashes when Google is down
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      console.warn("Failed to parse Gemini triage response as JSON, fallback parsing", parseError, "Text was:", text);
+      let matchedCategory = "Student Tutoring Services";
+      if (text.toLowerCase().includes("medical")) matchedCategory = "Medical Advice";
+      else if (text.toLowerCase().includes("career") || text.toLowerCase().includes("it ")) matchedCategory = "IT Career Guidance";
+      else if (text.toLowerCase().includes("legal") || text.toLowerCase().includes("attorney")) matchedCategory = "Legal Advice";
+      else if (text.toLowerCase().includes("hr ") || text.toLowerCase().includes("human resource")) matchedCategory = "HR Services";
+
+      return {
+        category: matchedCategory,
+        reason: "Mapped based on text keywords.",
+        isEmergency: false,
+        disclaimer: ""
+      };
+    }
+  } catch (error) {
+    console.error("AI Triage Failed. Providing fallback:", error.message);
     return {
-      category: "General Support",
-      reason: "Our AI is currently experiencing high traffic. A general support expert will review your query and assist you shortly."
+      category: "HR Services",
+      reason: "Our AI is currently experiencing high traffic. Please browse categories manually.",
+      isEmergency: false,
+      disclaimer: ""
     };
   }
 };
@@ -123,8 +161,51 @@ const generateMarketing = async (skills, expertId) => {
   }
 };
 
-// FIX 3: Ensure both functions are correctly exported
+/**
+ * Generates custom 1-sentence recommendation tags for experts based on the search query
+ */
+const generateExpertSummaries = async (query, experts) => {
+  try {
+    const model = getModel();
+    const formattedExperts = experts.map(e => ({
+      id: e.id,
+      name: e.name,
+      bio: e.bio || '',
+      marketingSnippet: e.marketingSnippet || '',
+      subjectExpertise: e.subjectExpertise
+    }));
+
+    const prompt = `
+      A user is searching for an expert with this query/problem description:
+      "${query}"
+
+      Here is the list of available experts:
+      ${JSON.stringify(formattedExperts)}
+
+      For each expert in the list, generate a dynamic, 1-sentence recommendation tag (max 15 words) explaining why they are recommended (or how they can help) for the user's specific problem.
+      If their profile does not directly match the query, write a general supportive tagline based on their bio/snippet.
+      
+      Return the response STRICTLY as a JSON object mapping expert IDs to their custom summaries. Do not wrap the JSON in markdown blocks like \`\`\`json.
+      Example:
+      {
+        "expert-uuid-1": "Highly recommended for Cloud Computing transitions based on your query."
+      }
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("AI Expert Summaries Failed:", error);
+    return {};
+  }
+};
+
+// FIX 3: Ensure all functions are correctly exported
 module.exports = {
   triageProblem,
-  generateMarketing
+  generateMarketing,
+  generateExpertSummaries
 };

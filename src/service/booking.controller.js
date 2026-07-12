@@ -2,6 +2,15 @@ const { sendEmail } = require('../service/email.service');
 const { createMeeting, getAvailability } = require('../service/calendar.service');
 const prisma = require('../prisma');
 
+const formatDateTime = (date) => {
+  if (!date) return 'Not Specified';
+  return new Date(date).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'full',
+    timeStyle: 'short'
+  });
+};
+
 const requestFreeService = async (req, res) => {
   try {
     const { expertId, serviceDetails, startTime, endTime, guestData } = req.body;
@@ -39,9 +48,11 @@ const requestFreeService = async (req, res) => {
 
     // 4. Send Email to the Expert
     const subject = 'New Request: Free 1-Hour Consultation';
+    const formattedTime = formatDateTime(startTime);
     const html = `
       <h2>New Consultation Request</h2>
       <p>You have received a new request for a Free 1-Hour Service.</p>
+      <p><strong>Proposed Date & Time:</strong> ${formattedTime} (IST)</p>
       <p><strong>Details:</strong> ${booking.details}</p>
       <br/>
       <a href="${acceptLink}" style="padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; display: inline-block;">Accept</a>
@@ -81,22 +92,39 @@ const acceptBooking = async (req, res) => {
     // Determine the user's email (registered or guest)
     const userEmail = booking.user?.email || booking.guestEmail;
 
+    const now = new Date();
+    const isLate = booking.startTime && now > new Date(booking.startTime);
+    const formattedTime = formatDateTime(booking.startTime);
+
     // Send confirmation email to the user/guest
     if (userEmail) {
-      const userSubject = 'Your Consultation is Confirmed!';
-      const userHtml = `
-        <h2>Booking Confirmed</h2>
-        <p>Your 1-hour consultation with <strong>${booking.expert.name}</strong> has been confirmed.</p>
-        <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
-      `;
+      let userSubject, userHtml;
+      if (isLate) {
+        userSubject = 'Booking Approved (Reschedule Recommended)';
+        userHtml = `
+          <h2>Booking Approved (Reschedule Recommended)</h2>
+          <p>Your 1-hour consultation request with <strong>${booking.expert.name}</strong> was approved.</p>
+          <p><strong>⚠️ Warning:</strong> This approval was received after your proposed slot (<strong>${formattedTime}</strong>) had already passed.</p>
+          <p>You can still join the Google Meet link here to see if the expert is available: <a href="${meetingLink}">${meetingLink}</a>, or we recommend booking a new session on the platform.</p>
+        `;
+      } else {
+        userSubject = 'Your Consultation is Confirmed!';
+        userHtml = `
+          <h2>Booking Confirmed</h2>
+          <p>Your 1-hour consultation with <strong>${booking.expert.name}</strong> has been confirmed.</p>
+          <p><strong>Scheduled Time:</strong> ${formattedTime} (IST)</p>
+          <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
+        `;
+      }
       await sendEmail(userEmail, userSubject, userHtml);
     }
 
     // Send notification email to the expert
-    const expertSubject = 'You Have Accepted a Consultation';
+    const expertSubject = isLate ? 'Consultation Accepted (After Proposed Slot)' : 'You Have Accepted a Consultation';
     const expertHtml = `
       <h2>Consultation Accepted</h2>
       <p>You have confirmed the 1-hour consultation with <strong>${booking.user?.name || booking.guestName || 'a guest user'}</strong>.</p>
+      ${isLate ? `<p><strong>⚠️ Note:</strong> You accepted this request after the proposed slot time (<strong>${formattedTime}</strong>) had already passed.</p>` : `<p><strong>Scheduled Time:</strong> ${formattedTime} (IST)</p>`}
       <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
     `;
     await sendEmail(booking.expert.email, expertSubject, expertHtml);
@@ -123,10 +151,28 @@ const rejectBooking = async (req, res) => {
     // Determine the user's email (registered or guest)
     const userEmail = booking.user?.email || booking.guestEmail;
 
+    const now = new Date();
+    const isLate = booking.startTime && now > new Date(booking.startTime);
+    const formattedTime = formatDateTime(booking.startTime);
+
     // Send rejection email back to the User/Guest
     if (userEmail) {
       const subject = 'Update: Consultation Request';
-      const html = `<p>We're sorry, but the Professional Expert has rejected your request for a free 1-hour service. Please feel free to book with another expert.</p>`;
+      let html;
+      if (isLate) {
+        html = `
+          <h2>Update: Consultation Request</h2>
+          <p>The expert, <strong>${booking.expert.name}</strong>, has rejected your request for a free 1-hour consultation.</p>
+          <p><strong>Note:</strong> This response was received after the proposed slot time (<strong>${formattedTime}</strong>) had already passed.</p>
+          <p>Please feel free to book another session with a different expert or select another time slot.</p>
+        `;
+      } else {
+        html = `
+          <h2>Update: Consultation Request</h2>
+          <p>We're sorry, but the expert, <strong>${booking.expert.name}</strong>, has rejected your request for a free 1-hour consultation.</p>
+          <p>Please feel free to book another session with a different expert.</p>
+        `;
+      }
       await sendEmail(userEmail, subject, html);
     }
 

@@ -14,7 +14,13 @@ const transporter = nodemailer.createTransport({
 /**
  * Sends a booking confirmation email to the guest audience
  */
-const sendBookingConfirmation = async (guestEmail, guestName, expertName, meetLink) => {
+const sendBookingConfirmation = async (guestEmail, guestName, expertName, meetLink, startTime) => {
+  const formattedTime = startTime ? new Date(startTime).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'full',
+    timeStyle: 'short'
+  }) : 'Not Specified';
+
   const mailOptions = {
     from: `"ConsultNow Secure Booking" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
     to: guestEmail,
@@ -29,7 +35,10 @@ const sendBookingConfirmation = async (guestEmail, guestName, expertName, meetLi
           <p>Your payment was successfully verified. Your 1-hour consultation session with <strong>${expertName}</strong> has been booked.</p>
           
           <div style="margin: 20px 0; padding: 15px; background-color: #f3f4f6; border-left: 4px solid #2563eb;">
-            <p style="margin: 0 0 10px 0;"><strong>Secure Google Meet Link:</strong></p>
+            <p style="margin: 0 0 5px 0;"><strong>Scheduled Time:</strong></p>
+            <p style="margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #374151;">${formattedTime} (IST)</p>
+
+            <p style="margin: 0 0 5px 0;"><strong>Secure Google Meet Link:</strong></p>
             <a href="${meetLink}" style="color: #2563eb; font-weight: bold; word-break: break-all;">${meetLink}</a>
           </div>
           

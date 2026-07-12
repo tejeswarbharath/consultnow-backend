@@ -81,6 +81,7 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !proce
         calendarId: 'primary',
         resource: event,
         conferenceDataVersion: 1, // MUST be 1 to generate the Meet link
+        sendUpdates: 'all',
       });
 
       console.log('[ConsultNow Calendar] Event created successfully! Meet Link:', response.data.hangoutLink);

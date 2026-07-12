@@ -156,7 +156,7 @@ const verifyPayment = async (req, res) => {
         const meetLink = await createMeeting(expert.email, guestData.email, summary, desc, startTime, endTime);
 
         // 4. Dispatch the HTML confirmation email to the guest containing the link
-        await sendBookingConfirmation(guestData.email, guestData.name, expert.name, meetLink);
+        await sendBookingConfirmation(guestData.email, guestData.name, expert.name, meetLink, startTime);
       }
     } catch (automationError) {
       // We log this but DO NOT throw it back to the frontend. 

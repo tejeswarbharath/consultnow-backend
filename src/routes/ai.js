@@ -64,6 +64,22 @@ router.post('/generate-marketing', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/ai/expert-twin-chat
+router.post('/expert-twin-chat', async (req, res) => {
+  try {
+    const { message, history, expertId } = req.body;
+    if (!message || !expertId) {
+      return res.status(400).json({ error: 'Message and expertId are required.' });
+    }
+
+    const reply = await aiService.generateExpertTwinResponse(message, history, expertId);
+    res.json({ reply });
+  } catch (error) {
+    console.error('Error in /expert-twin-chat:', error);
+    res.status(500).json({ error: 'Failed to generate response from expert twin.' });
+  }
+});
+
 const { verifySmtpConnection } = require('../service/email.service');
 
 // GET /api/ai/verify-email

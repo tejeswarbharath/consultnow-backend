@@ -194,9 +194,80 @@ const generateExpertSummaries = async (query, experts) => {
   }
 };
 
+/**
+ * Roleplay as an AI Twin of a selected expert
+ */
+const generateExpertTwinResponse = async (message, history = [], expertId) => {
+  try {
+    if (!expertId) {
+      throw new Error("Expert ID is required for AI Twin Chat.");
+    }
+
+    const expert = await prisma.expert.findUnique({
+      where: { id: expertId }
+    });
+
+    if (!expert) {
+      throw new Error("Expert not found.");
+    }
+
+    // Format chat history for Gemini API
+    // Gemini history expects objects with: role ('user' | 'model') and parts: [{ text: string }]
+    let formattedHistory = (history || []).map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.text }]
+    }));
+
+    // Gemini requires the chat history to start with a 'user' message.
+    // We slice the history array from the first 'user' message.
+    const firstUserIndex = formattedHistory.findIndex(msg => msg.role === 'user');
+    if (firstUserIndex > 0) {
+      formattedHistory = formattedHistory.slice(firstUserIndex);
+    } else if (firstUserIndex === -1) {
+      formattedHistory = [];
+    }
+
+    const systemInstruction = `
+      You are the AI Twin of ${expert.name}, who is a professional expert in "${expert.subjectExpertise}" on the ConsultNow platform.
+      
+      Here are the expert's credentials and details:
+      - Name: ${expert.name}
+      - Subject Expertise: ${expert.subjectExpertise}
+      - Experience: ${expert.yearsExperience} years
+      - Bio/Background: ${expert.bio || expert.marketingSnippet || 'No additional bio provided.'}
+
+      Your instructions:
+      1. Roleplay strictly as the AI Twin of ${expert.name}. Speak in their professional, supportive, and expert voice.
+      2. Help the user clarify their challenges, prepare questions, or get initial educational/operational thoughts on their query.
+      3. Keep your responses relatively concise (1-3 paragraphs) as this is a quick chat interface.
+      4. Since you are a simulation, if the client asks complex, deep-dive questions or requests direct service action, gently suggest they book a full, live, face-to-face slot with the real ${expert.name} on the ConsultNow booking page.
+      5. Make it clear you are the AI Twin helper.
+    `;
+
+    // Start Gemini Chat session with System Instructions
+    const genModel = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: systemInstruction
+    });
+
+    const chatSession = genModel.startChat({
+      history: formattedHistory
+    });
+
+    const result = await chatSession.sendMessage(message);
+    const response = await result.response;
+    return response.text();
+
+  } catch (error) {
+    console.error("AI Expert Twin Chat generation failed:", error);
+    return "Hi, I am having a bit of trouble retrieving my thoughts right now. Please try again in a moment, or you can book a live consultation with the real expert directly!";
+  }
+};
+
 // FIX 3: Ensure all functions are correctly exported
 module.exports = {
   triageProblem,
   generateMarketing,
-  generateExpertSummaries
+  generateExpertSummaries,
+  generateExpertTwinResponse
 };

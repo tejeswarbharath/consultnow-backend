@@ -32,7 +32,7 @@ async function generateContentWithRetry(prompt, maxRetries = 3) {
 async function triageProblem(problemDescription) {
   const prompt = `
     You are an AI support agent for ConsultNow, a professional services platform.
-    Analyze the following user problem description and recommend the single most appropriate professional service category from this list: Legal, IT, Medical, Financial, Education, Real Estate, Marketing.
+    Analyze the following user problem description and recommend the single most appropriate professional service category from this list: Student Tutoring Services, IT Career Guidance, HR Services.
     
     User Problem: "${problemDescription}"
     

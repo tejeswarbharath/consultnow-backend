@@ -35,7 +35,7 @@ router.get('/', async (req, res) => {
     // 2. Group the data for the frontend based on the new string field
     if (groupBy === 'subjectExpertise') {
       const groupedExperts = experts.reduce((acc, expert) => {
-        // Group by the string value (e.g., "Medical Advice", "IT Career Guidance")
+        // Group by the string value (e.g., "IT Career Guidance")
         const categoryName = expert.subjectExpertise; 
         
         if (!acc[categoryName]) {

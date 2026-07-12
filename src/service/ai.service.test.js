@@ -12,7 +12,7 @@ describe('AI Service', () => {
 
   describe('triageProblem', () => {
     it('should return a category from the AI service', async () => {
-      const mockResponse = 'Legal';
+      const mockResponse = 'IT Career Guidance';
       aiService.triageProblem.mockResolvedValue(mockResponse);
 
       const problemDescription = 'I need help with a contract.';

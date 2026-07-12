@@ -6,9 +6,7 @@ async function main() {
   // 1. Create Categories
   const categoriesData = [
     { name: 'Student Tutoring Services', description: 'Academic help and tutoring for students.' },
-    { name: 'Medical Advice', description: 'Consultations with certified healthcare professionals.' },
     { name: 'IT Career Guidance', description: 'Mentorship and advice for tech careers.' },
-    { name: 'Legal Advice', description: 'Consultations with legal experts and attorneys.' },
     { name: 'HR Services', description: 'Human resources consulting and advice.' }
   ];
 

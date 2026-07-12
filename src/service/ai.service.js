@@ -54,29 +54,22 @@ const triageProblem = async (problemDescription) => {
     const model = getModel();
     const prompt = `
       You are an AI support agent for ConsultNow, a professional services platform.
-      The platform has 5 categories of expert services:
+      The platform has 3 categories of expert services:
       1. "Student Tutoring Services" - for academic support, tutoring, and homework for grades 1-10.
-      2. "Medical Advice" - for general health, wellness, and non-emergency medical queries.
-      3. "IT Career Guidance" - for tech career advice, transitions, and mentorship.
-      4. "Legal Advice" - for general legal information, rights, and clarification.
-      5. "HR Services" - for workplace policy, disputes, and HR best practices.
+      2. "IT Career Guidance" - for tech career advice, transitions, and mentorship.
+      3. "HR Services" - for workplace policy, disputes, and HR best practices.
 
       A user typed the following problem description:
       "${problemDescription}"
 
       Tasks:
-      1. Classify the problem into one of the 5 categories above. Choose the closest match.
-      2. Determine if this is a high-risk emergency.
-         - For "Medical Advice": check if there is an emergency, severe trauma, life-threatening symptoms (e.g., chest pain, shortness of breath, severe bleeding, loss of consciousness, suicidal thoughts or self-harm).
-         - For "Legal Advice": check if there is an immediate legal emergency (e.g., active arrest, search warrant, jail, immediate physical safety danger).
-      3. Generate a brief 1-2 sentence reason for your classification.
+      1. Classify the problem into one of the 3 categories above. Choose the closest match.
+      2. Generate a brief 1-2 sentence reason for your classification.
 
       Return the response STRICTLY as a JSON object with the following keys. Do NOT wrap the JSON in markdown blocks like \`\`\`json or \`\`\`:
       {
-        "category": "One of the 5 exact category names listed above",
+        "category": "One of the 3 exact category names listed above",
         "reason": "Brief reason why",
-        "isEmergency": true or false,
-        "disclaimer": "Emergency warning message if isEmergency is true, otherwise empty string"
       }
     `;
 
@@ -89,9 +82,7 @@ const triageProblem = async (problemDescription) => {
     } catch (parseError) {
       console.warn("Failed to parse Gemini triage response as JSON, fallback parsing", parseError, "Text was:", text);
       let matchedCategory = "Student Tutoring Services";
-      if (text.toLowerCase().includes("medical")) matchedCategory = "Medical Advice";
-      else if (text.toLowerCase().includes("career") || text.toLowerCase().includes("it ")) matchedCategory = "IT Career Guidance";
-      else if (text.toLowerCase().includes("legal") || text.toLowerCase().includes("attorney")) matchedCategory = "Legal Advice";
+      if (text.toLowerCase().includes("career") || text.toLowerCase().includes("it ")) matchedCategory = "IT Career Guidance";
       else if (text.toLowerCase().includes("hr ") || text.toLowerCase().includes("human resource")) matchedCategory = "HR Services";
 
       return {

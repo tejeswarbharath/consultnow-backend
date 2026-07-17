@@ -1,5 +1,7 @@
 // src/index.js
 require('dotenv').config(); // Ensure env vars are loaded
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 
 const express = require('express');
 const cors = require('cors');

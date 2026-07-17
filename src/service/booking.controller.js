@@ -42,7 +42,7 @@ const requestFreeService = async (req, res) => {
     });
 
     // 3. Construct functional Accept/Reject links
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    const backendUrl = process.env.BACKEND_URL || 'https://api.consultnow.in';
     const acceptLink = `${backendUrl}/api/bookings/accept/${booking.id}`;
     const rejectLink = `${backendUrl}/api/bookings/reject/${booking.id}`;
 
@@ -130,7 +130,7 @@ const acceptBooking = async (req, res) => {
     await sendEmail(booking.expert.email, expertSubject, expertHtml);
 
     // Redirect the expert to a frontend success/dashboard page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
     res.redirect(`${frontendUrl}/dashboard?status=accepted&bookingId=${id}`);
   } catch (error) {
     console.error('Error accepting booking:', error);
@@ -177,7 +177,7 @@ const rejectBooking = async (req, res) => {
     }
 
     // Redirect the expert to a frontend confirmation page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
     res.redirect(`${frontendUrl}/dashboard?status=rejected&bookingId=${id}`);
   } catch (error) {
     console.error('Error rejecting booking:', error);

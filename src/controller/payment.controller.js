@@ -176,7 +176,30 @@ const verifyPayment = async (req, res) => {
   }
 };
 
+const cancelPayment = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) {
+      return res.status(400).json({ error: 'Missing orderId' });
+    }
+
+    const updatedTransaction = await prisma.transaction.update({
+      where: { orderId },
+      data: { status: 'FAILED' }
+    });
+
+    res.status(200).json({
+      message: 'Transaction marked as failed.',
+      transaction: updatedTransaction
+    });
+  } catch (error) {
+    console.error('Error cancelling payment:', error);
+    res.status(500).json({ error: 'Internal server error during cancellation.' });
+  }
+};
+
 module.exports = {
   createOrder,
-  verifyPayment
+  verifyPayment,
+  cancelPayment
 };

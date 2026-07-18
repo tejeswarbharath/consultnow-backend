@@ -60,7 +60,11 @@ const requestFreeService = async (req, res) => {
       <a href="${rejectLink}" style="padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; display: inline-block;">Reject</a>
     `;
 
-    await sendEmail(expert.email, subject, html);
+    try {
+      await sendEmail(expert.email, subject, html);
+    } catch (emailError) {
+      console.error('[ConsultNow Email] Failed to send free consultation request email:', emailError);
+    }
 
     res.status(200).json({ message: 'Free service requested successfully. Notification sent to expert.' });
   } catch (error) {
@@ -116,7 +120,11 @@ const acceptBooking = async (req, res) => {
           <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
         `;
       }
-      await sendEmail(userEmail, userSubject, userHtml);
+      try {
+        await sendEmail(userEmail, userSubject, userHtml);
+      } catch (emailError) {
+        console.error('[ConsultNow Email] Failed to send confirmation email to user:', emailError);
+      }
     }
 
     // Send notification email to the expert
@@ -127,7 +135,11 @@ const acceptBooking = async (req, res) => {
       ${isLate ? `<p><strong>⚠️ Note:</strong> You accepted this request after the proposed slot time (<strong>${formattedTime}</strong>) had already passed.</p>` : `<p><strong>Scheduled Time:</strong> ${formattedTime} (IST)</p>`}
       <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
     `;
-    await sendEmail(booking.expert.email, expertSubject, expertHtml);
+    try {
+      await sendEmail(booking.expert.email, expertSubject, expertHtml);
+    } catch (emailError) {
+      console.error('[ConsultNow Email] Failed to send confirmation email to expert:', emailError);
+    }
 
     // Redirect the expert to a frontend success/dashboard page
     const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
@@ -173,7 +185,11 @@ const rejectBooking = async (req, res) => {
           <p>Please feel free to book another session with a different expert.</p>
         `;
       }
-      await sendEmail(userEmail, subject, html);
+      try {
+        await sendEmail(userEmail, subject, html);
+      } catch (emailError) {
+        console.error('[ConsultNow Email] Failed to send rejection email to user:', emailError);
+      }
     }
 
     // Redirect the expert to a frontend confirmation page

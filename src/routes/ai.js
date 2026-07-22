@@ -80,6 +80,54 @@ router.post('/expert-twin-chat', async (req, res) => {
   }
 });
 
+// POST /api/ai/agenda
+router.post('/agenda', async (req, res) => {
+  try {
+    const { problemDetails, expertSubject } = req.body;
+    const result = await aiService.generateAgenda(problemDetails, expertSubject);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /agenda:', error);
+    res.status(500).json({ error: 'Failed to generate agenda.' });
+  }
+});
+
+// POST /api/ai/briefing
+router.post('/briefing', async (req, res) => {
+  try {
+    const { clientNotes, bookingType } = req.body;
+    const result = await aiService.generateBriefing(clientNotes, bookingType);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /briefing:', error);
+    res.status(500).json({ error: 'Failed to generate briefing digest.' });
+  }
+});
+
+// POST /api/ai/followup
+router.post('/followup', async (req, res) => {
+  try {
+    const { clientName, topic, notes } = req.body;
+    const result = await aiService.generateFollowUp(clientName, topic, notes);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /followup:', error);
+    res.status(500).json({ error: 'Failed to generate follow-up draft.' });
+  }
+});
+
+// POST /api/ai/recommend-pricing
+router.post('/recommend-pricing', async (req, res) => {
+  try {
+    const { yearsExperience, subjectExpertise, currentRate } = req.body;
+    const result = await aiService.recommendPricing(yearsExperience, subjectExpertise, currentRate);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in /recommend-pricing:', error);
+    res.status(500).json({ error: 'Failed to generate pricing recommendations.' });
+  }
+});
+
 const { verifySmtpConnection } = require('../service/email.service');
 
 // GET /api/ai/verify-email

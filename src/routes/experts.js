@@ -107,19 +107,27 @@ router.get('/:id', async (req, res) => {
 // This route should be protected to ensure only the authenticated expert can update their own profile.
 router.put('/:id', authMiddleware, isExpertOwner, async (req, res) => {
   const { id } = req.params;
-  const { bio, marketingSnippet } = req.body;
+  const { bio, marketingSnippet, pricePerHour } = req.body;
 
   try {
-    // Add input validation here using a library like express-validator
-    if (typeof bio !== 'string' || typeof marketingSnippet !== 'string') {
-      return res.status(400).json({ error: 'Invalid input data.' });
+    const updateData = {};
+    if (typeof bio === 'string') updateData.bio = bio;
+    if (typeof marketingSnippet === 'string') updateData.marketingSnippet = marketingSnippet;
+    if (pricePerHour !== undefined && pricePerHour !== null) {
+      const parsedPrice = parseFloat(pricePerHour);
+      if (isNaN(parsedPrice) || parsedPrice < 0) {
+        return res.status(400).json({ error: 'Invalid price per hour.' });
+      }
+      updateData.pricePerHour = parsedPrice;
     }
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided for update.' });
+    }
+
     const expert = await prisma.expert.update({
       where: { id },
-      data: {
-        bio,
-        marketingSnippet,
-      },
+      data: updateData,
     });
 
     res.json({ message: 'Expert profile updated successfully', expert });

@@ -22,7 +22,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 /**
  * Helper: Execute Gemini call with Exponential Backoff
  */
-const generateWithRetry = async (model, prompt, maxRetries = 3) => {
+const generateWithRetry = async (model, prompt, maxRetries = 4) => {
   let baseDelay = 2000; // Start with a 2-second delay
 
   for (let i = 0; i < maxRetries; i++) {
@@ -30,16 +30,20 @@ const generateWithRetry = async (model, prompt, maxRetries = 3) => {
       const result = await model.generateContent(prompt);
       return await result.response;
     } catch (error) {
-      const isRateLimit = error.status === 429 || 
-                          (error.message && error.message.toLowerCase().includes('too high')) ||
-                          (error.message && error.message.toLowerCase().includes('overloaded'));
+      const status = error.status || (error.response && error.response.status);
+      const msg = (error.message || '').toLowerCase();
+      const isTransient = status === 429 || status === 503 || status === 500 ||
+                          msg.includes('too high') ||
+                          msg.includes('overloaded') ||
+                          msg.includes('high demand') ||
+                          msg.includes('service unavailable') ||
+                          msg.includes('unavailable');
 
-      if (isRateLimit && i < maxRetries - 1) {
-        console.warn(`[ConsultNow AI] Traffic high. Retrying in ${baseDelay / 1000}s... (Attempt ${i + 1} of ${maxRetries})`);
+      if (isTransient && i < maxRetries - 1) {
+        console.warn(`[ConsultNow AI] Gemini API busy/unavailable (${status || '503'}). Retrying in ${baseDelay / 1000}s... (Attempt ${i + 1} of ${maxRetries})`);
         await delay(baseDelay);
         baseDelay *= 2; // Double the wait time for the next attempt
       } else {
-        // If it's not a rate limit error, or we've run out of retries, throw it.
         throw error; 
       }
     }
@@ -66,7 +70,7 @@ const triageProblem = async (problemDescription) => {
       1. Classify the problem into one of the 3 categories above. Choose the closest match.
       2. Generate a brief 1-2 sentence reason for your classification.
 
-      Return the response STRICTLY as a JSON object with the following keys. Do NOT wrap the JSON in markdown blocks like \`\`\`json or \`\`\`:
+      Return the response STRICTLY as a JSON object with the following keys. Do NOT wrap the JSON in markdown code blocks:
       {
         "category": "One of the 3 exact category names listed above",
         "reason": "Brief reason why",
@@ -109,15 +113,20 @@ const triageProblem = async (problemDescription) => {
 const generateMarketing = async (skills, expertId) => {
   const model = getModel();
   const prompt = `
-    An expert has the following skills and background:
+    An expert has provided the following skills, experience, and background:
     "${skills}"
     
     Generate the following to help them market their services on our professional platform:
     1. A professional bio (approx 3-4 sentences).
-    2. A catchy marketing snippet/tagline to attract clients.
+    2. A realistic marketing snippet/tagline to attract clients.
     
+    CRITICAL TONE & STYLE GUIDELINES:
+    - Tone: Highly realistic, grounded, authentic, and professional.
+    - Avoid: Artistic fluff, dramatic/flowery language, poetic metaphors, or exaggerated buzzwords (e.g. do NOT use "visionary master", "symphony of excellence", "crafting digital destiny", etc.).
+    - Impact: The client reading this should feel like a genuine, approachable, down-to-earth human expert is speaking directly to them right now. Focus on clear skills, practical outcomes, and real-world experience.
+
     Return the response strictly as a JSON object with two keys: "bio" and "marketingSnippet".
-    Do not wrap the JSON in markdown blocks like \`\`\`json.
+    Do not wrap the JSON in markdown code blocks.
   `;
 
   const response = await generateWithRetry(model, prompt);
@@ -176,7 +185,7 @@ const generateExpertSummaries = async (query, experts) => {
       For each expert in the list, generate a dynamic, 1-sentence recommendation tag (max 15 words) explaining why they are recommended (or how they can help) for the user's specific problem.
       If their profile does not directly match the query, write a general supportive tagline based on their bio/snippet.
       
-      Return the response STRICTLY as a JSON object mapping expert IDs to their custom summaries. Do not wrap the JSON in markdown blocks like \`\`\`json.
+      Return the response STRICTLY as a JSON object mapping expert IDs to their custom summaries. Do not wrap the JSON in markdown code blocks.
       Example:
       {
         "expert-uuid-1": "Highly recommended for Cloud Computing transitions based on your query."
@@ -237,11 +246,12 @@ const generateExpertTwinResponse = async (message, history = [], expertId) => {
       - Bio/Background: ${expert.bio || expert.marketingSnippet || 'No additional bio provided.'}
 
       Your instructions:
-      1. Roleplay strictly as the AI Twin of ${expert.name}. Speak in their professional, supportive, and expert voice.
-      2. Help the user clarify their challenges, prepare questions, or get initial educational/operational thoughts on their query.
-      3. Keep your responses relatively concise (1-3 paragraphs) as this is a quick chat interface.
-      4. Since you are a simulation, if the client asks complex, deep-dive questions or requests direct service action, gently suggest they book a full, live, face-to-face slot with the real ${expert.name} on the ConsultNow booking page.
-      5. Make it clear you are the AI Twin helper.
+      1. Roleplay strictly as the AI Twin of ${expert.name}. Speak in a grounded, realistic, down-to-earth, and professional human voice (avoid artistic fluff, flowery metaphors, or dramatic hyperbole).
+      2. Make the audience feel that the expert is right here, right now, responding with real-world clarity and practical advice.
+      3. Help the user clarify their challenges, prepare questions, or get initial educational/operational thoughts on their query.
+      4. Keep your responses relatively concise (1-3 paragraphs) as this is a quick chat interface.
+      5. Since you are an AI simulation, if the client asks complex, deep-dive questions or requests direct service action, gently suggest they book a full, live slot with the real ${expert.name} on the ConsultNow booking page.
+      6. Make it clear you are the AI Twin helper.
     `;
 
     // Start Gemini Chat session with System Instructions
@@ -264,10 +274,171 @@ const generateExpertTwinResponse = async (message, history = [], expertId) => {
   }
 };
 
-// FIX 3: Ensure all functions are correctly exported
+/**
+ * Generate a 3-step structured consultation preparation agenda for clients
+ */
+const generateAgenda = async (problemDetails, expertSubject) => {
+  try {
+    const model = getModel();
+    const prompt = `
+      A client is preparing for a live consultation with an expert in "${expertSubject || 'General Consulting'}".
+      The client described their issue/goal as:
+      "${problemDetails}"
+
+      Generate a clear, realistic 3-step preparation agenda for the client to bring into their consultation.
+      Focus on practical, grounded items (e.g. what documents to prepare, what specific questions to ask, key objectives).
+
+      Return strictly a JSON object formatted as:
+      {
+        "agenda": [
+          "Step 1: ...",
+          "Step 2: ...",
+          "Step 3: ..."
+        ]
+      }
+      Do not wrap in markdown \`\`\`json.
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("generateAgenda failed:", error);
+    return {
+      agenda: [
+        "1. Write down your top 3 specific goals for this consultation.",
+        "2. Gather any relevant documents or code/resume references.",
+        "3. Prepare specific questions about next steps and actionable solutions."
+      ]
+    };
+  }
+};
+
+/**
+ * Generate a 30-second intake briefing digest for an expert before a call
+ */
+const generateBriefing = async (clientNotes, bookingType) => {
+  try {
+    const model = getModel();
+    const prompt = `
+      An expert is about to start a "${bookingType || 'Consultation'}" session with a client.
+      The client submitted the following initial notes:
+      "${clientNotes}"
+
+      Summarize this into a concise 30-second pre-call briefing digest for the expert.
+
+      Return strictly a JSON object:
+      {
+        "summary": "Brief 1-2 sentence core problem overview",
+        "keyFocus": "Main priority area for the call",
+        "suggestedApproach": "Recommended starting point for the expert"
+      }
+      Do not wrap in markdown \`\`\`json.
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("generateBriefing failed:", error);
+    return {
+      summary: "Client requires assistance with their submitted topic.",
+      keyFocus: "Clarify primary goals and immediate bottlenecks.",
+      suggestedApproach: "Start with a 2-minute goal alignment before diving into solutions."
+    };
+  }
+};
+
+/**
+ * Generate a post-consultation follow-up email draft and session summary
+ */
+const generateFollowUp = async (clientName, topic, notes) => {
+  try {
+    const model = getModel();
+    const prompt = `
+      An expert completed a consultation session with client "${clientName || 'Client'}".
+      Topic: "${topic || 'Consultation'}"
+      Key notes/discussion points: "${notes || 'General consultation review'}"
+
+      Generate a professional, realistic post-consultation follow-up email draft and action summary.
+
+      Return strictly a JSON object:
+      {
+        "subject": "Follow-up: Summary & Next Steps for our Consultation",
+        "emailBody": "Realistic, warm, professional email body...",
+        "actionItems": [
+          "Action 1...",
+          "Action 2..."
+        ]
+      }
+      Do not wrap in markdown \`\`\`json.
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("generateFollowUp failed:", error);
+    return {
+      subject: `Follow-up & Next Steps - ConsultNow Session`,
+      emailBody: `Hi ${clientName || 'there'},\n\nThank you for connecting with me today! Below is a summary of our discussion along with recommended next steps.`,
+      actionItems: [
+        "Review the discussion points from our session.",
+        "Implement agreed-upon preliminary action items."
+      ]
+    };
+  }
+};
+
+/**
+ * Analyze experience and market benchmarks to recommend expert hourly rate
+ */
+const recommendPricing = async (yearsExperience, subjectExpertise, currentRate) => {
+  try {
+    const model = getModel();
+    const prompt = `
+      An expert has the following profile:
+      - Subject Expertise: "${subjectExpertise}"
+      - Years of Experience: ${yearsExperience}
+      - Current Rate: ${currentRate ? currentRate + ' INR/hr' : 'Not set'}
+
+      Provide a realistic market pricing benchmark and rate recommendation in INR (Indian Rupees).
+
+      Return strictly a JSON object:
+      {
+        "recommendedPrice": number (e.g. 1500),
+        "priceRange": "minPrice - maxPrice INR",
+        "rationale": "Clear, grounded 2-sentence rationale based on market demand and experience."
+      }
+      Do not wrap in markdown \`\`\`json.
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("recommendPricing failed:", error);
+    const baseRate = Math.max(500, (yearsExperience || 2) * 300);
+    return {
+      recommendedPrice: baseRate,
+      priceRange: `${Math.round(baseRate * 0.8)} - ${Math.round(baseRate * 1.3)} INR`,
+      rationale: "Based on standard market rates for experts with similar background and experience."
+    };
+  }
+};
+
+// Export all AI methods
 module.exports = {
   triageProblem,
   generateMarketing,
   generateExpertSummaries,
-  generateExpertTwinResponse
+  generateExpertTwinResponse,
+  generateAgenda,
+  generateBriefing,
+  generateFollowUp,
+  recommendPricing
 };

@@ -431,6 +431,107 @@ const recommendPricing = async (yearsExperience, subjectExpertise, currentRate) 
   }
 };
 
+/**
+ * Generate a complete, high-converting AI-driven SEO profile for an Expert using Gemini
+ */
+const generateSeoProfile = async (expertId) => {
+  try {
+    const expert = await prisma.expert.findUnique({
+      where: { id: expertId }
+    });
+
+    if (!expert) {
+      throw new Error(`Expert with ID ${expertId} not found`);
+    }
+
+    const model = getModel();
+    const prompt = `
+      You are an elite programmatic SEO and copywriting specialist for ConsultNow.
+      Create an optimized, high-ranking public profile page for the following expert:
+      - Name: "${expert.name}"
+      - Subject Expertise: "${expert.subjectExpertise}"
+      - Years of Experience: ${expert.yearsExperience}
+      - Bio snippet / existing info: "${expert.bio || 'Top professional consultant'}"
+
+      Requirements:
+      1. Write a 250 to 300 word engaging, authoritative bio highlighting their expertise, value proposition, and why clients should book them.
+      2. Generate 4 structured key service offerings tailored to search queries (e.g. "Cloud Computing Interview Prep", "1-on-1 Resume & Portfolio Review"). Each with title and 2-sentence description.
+      3. Generate 4 "Commonly Asked Questions" (FAQs) with detailed, high-value answers specific to their field (e.g. "How do I prepare for a Cloud Computing interview?", "What happens during a consultation session?").
+      4. Generate a SEO Meta Title (under 60 chars, e.g. "Top ${expert.subjectExpertise} Consultant | ${expert.name}") and Meta Description (under 150 chars).
+
+      Return strictly a JSON object without markdown formatting:
+      {
+        "metaTitle": "SEO Meta Title string",
+        "metaDescription": "SEO Meta Description string",
+        "seoBio": "250-300 word detailed SEO bio",
+        "services": [
+          { "title": "Service Name", "description": "Detailed description of service" }
+        ],
+        "faqs": [
+          { "question": "Frequently asked question?", "answer": "Clear actionable answer." }
+        ]
+      }
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+
+    let seoData;
+    try {
+      seoData = JSON.parse(text);
+    } catch (err) {
+      console.warn("Failed to parse Gemini SEO response JSON, using fallback structure", err);
+      seoData = {
+        metaTitle: `${expert.name} - ${expert.subjectExpertise} Expert | ConsultNow`,
+        metaDescription: `Book a 1-on-1 consultation session with ${expert.name}, specialized in ${expert.subjectExpertise} with ${expert.yearsExperience}+ years experience.`,
+        seoBio: expert.bio || `${expert.name} is an experienced professional in ${expert.subjectExpertise} with over ${expert.yearsExperience} years of proven track record helping individuals and organizations achieve their goals through targeted consulting sessions on ConsultNow.`,
+        services: [
+          { title: "1-on-1 Strategy Session", description: `Personalized consulting tailored to your goals in ${expert.subjectExpertise}.` },
+          { title: "Career & Skill Assessment", description: "Comprehensive audit and actionable roadmap for career advancement." }
+        ],
+        faqs: [
+          { question: `How can ${expert.name} help me in ${expert.subjectExpertise}?`, answer: `With ${expert.yearsExperience}+ years of industry experience, ${expert.name} offers direct guidance, strategic advice, and actionable solutions.` },
+          { question: "How do I book a session?", answer: "Choose an available time slot on the profile page, complete payment, and instant video meeting credentials will be generated." }
+        ]
+      };
+    }
+
+    // Generate unique slug
+    const cleanName = expert.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const cleanSubject = expert.subjectExpertise.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    const slug = `${cleanName}-${cleanSubject}-${expert.id.slice(0, 5)}`;
+
+    // Generate referral code if missing
+    const referralCode = expert.referralCode || `REF-${expert.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)}${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const updatedExpert = await prisma.expert.update({
+      where: { id: expertId },
+      data: {
+        seoSlug: expert.seoSlug || slug,
+        seoBio: seoData.seoBio,
+        seoServices: JSON.stringify(seoData.services),
+        seoFaqs: JSON.stringify(seoData.faqs),
+        seoMetaTitle: seoData.metaTitle,
+        seoMetaDescription: seoData.metaDescription,
+        referralCode: referralCode
+      }
+    });
+
+    return {
+      expert: updatedExpert,
+      seoProfile: {
+        ...seoData,
+        slug: updatedExpert.seoSlug,
+        referralCode: updatedExpert.referralCode
+      }
+    };
+  } catch (error) {
+    console.error("generateSeoProfile failed:", error);
+    throw error;
+  }
+};
+
 // Export all AI methods
 module.exports = {
   triageProblem,
@@ -440,5 +541,6 @@ module.exports = {
   generateAgenda,
   generateBriefing,
   generateFollowUp,
-  recommendPricing
+  recommendPricing,
+  generateSeoProfile
 };

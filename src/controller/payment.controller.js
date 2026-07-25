@@ -24,7 +24,7 @@ const createOrder = async (req, res) => {
     return res.status(503).json({ error: 'Payment gateway is not configured.' });
   }
   try {
-    const { expertId, amount, currency, guestData } = req.body;
+    const { expertId, amount, currency, guestData, referralCode } = req.body;
 
     if (!expertId || !amount || !guestData) {
       return res.status(400).json({ error: 'Missing required checkout information.' });
@@ -50,6 +50,7 @@ const createOrder = async (req, res) => {
         amount: subunitAmount,
         currency: options.currency,
         expertId: expertId,
+        referralCode: referralCode ? referralCode.trim().toUpperCase() : null,
         status: 'CREATED'
       }
     });
@@ -109,7 +110,6 @@ const verifyPayment = async (req, res) => {
     const razorpayOrderDetails = await razorpay.orders.fetch(razorpay_order_id);
 
     if (razorpayOrderDetails.amount !== transactionFromDb.amount) {
-      // Handle amount mismatch - this is a critical security event.
       console.error(`[SECURITY ALERT] Payment amount mismatch for order ${razorpay_order_id}. Expected ${transactionFromDb.amount}, got ${razorpayOrderDetails.amount}.`);
       return res.status(400).json({ error: 'Payment amount mismatch. Verification failed.' });
     }
@@ -125,18 +125,16 @@ const verifyPayment = async (req, res) => {
     });
 
     // ---------------------------------------------------------
-    // POST-PAYMENT AUTOMATION: Create Booking, Google Calendar & Email Dispatch
+    // POST-PAYMENT AUTOMATION: Create Booking, Google Calendar, Affiliate Reward & Email
     // ---------------------------------------------------------
     try {
-      // 1. Fetch Expert details from the database
       const expert = await prisma.expert.findUnique({
         where: { id: expertId },
         select: { email: true, name: true }
       });
 
       if (expert) {
-        // 2. Create the Booking record for the paid session
-        await prisma.booking.create({
+        const booking = await prisma.booking.create({
           data: {
             expertId: expertId,
             status: 'PAID',
@@ -145,23 +143,68 @@ const verifyPayment = async (req, res) => {
             startTime: startTime,
             endTime: endTime,
             guestName: guestData.name,
-            guestEmail: guestData.email
+            guestEmail: guestData.email,
+            referralCode: transactionFromDb.referralCode
           }
         });
+
+        // AFFILIATE REWARD AUTOMATION
+        if (transactionFromDb.referralCode) {
+          const code = transactionFromDb.referralCode;
+          const refExpert = await prisma.expert.findUnique({ where: { referralCode: code } });
+          const refUser = await prisma.user.findUnique({ where: { referralCode: code } });
+
+          const referrer = refExpert || refUser;
+          const referrerType = refExpert ? 'EXPERT' : (refUser ? 'USER' : null);
+
+          if (referrer && referrerType) {
+            const actualAmountPaid = transactionFromDb.amount / 100;
+            const commissionEarned = Math.round((actualAmountPaid * 0.10) * 100) / 100; // 10% commission
+
+            // Log referral
+            await prisma.referralLog.create({
+              data: {
+                referrerId: referrer.id,
+                referrerType: referrerType,
+                referredUserEmail: guestData.email,
+                bookingId: booking.id,
+                orderId: razorpay_order_id,
+                transactionAmount: actualAmountPaid,
+                commissionEarned: commissionEarned,
+                referralCodeUsed: code,
+                status: 'CREDITED'
+              }
+            });
+
+            // Update balance & total count
+            if (referrerType === 'EXPERT') {
+              await prisma.expert.update({
+                where: { id: referrer.id },
+                data: {
+                  affiliateBalance: { increment: commissionEarned },
+                  totalReferrals: { increment: 1 }
+                }
+              });
+            } else {
+              await prisma.user.update({
+                where: { id: referrer.id },
+                data: {
+                  affiliateBalance: { increment: commissionEarned },
+                  totalReferrals: { increment: 1 }
+                }
+              });
+            }
+          }
+        }
         
         const summary = `ConsultNow Session: ${guestData.name} & ${expert.name}`;
         const desc = `Problem Description provided by guest: ${guestData.problem || 'No description provided.'}`;
 
-        // 3. Automatically generate the Google Meet Link with the correct time
         const meetLink = await createMeeting(expert.email, guestData.email, summary, desc, startTime, endTime);
 
-        // 4. Dispatch the HTML confirmation email to the guest containing the link
         await sendBookingConfirmation(guestData.email, guestData.name, expert.name, meetLink, startTime);
       }
     } catch (automationError) {
-      // We log this but DO NOT throw it back to the frontend. 
-      // The payment succeeded; we don't want the UI to show a payment error 
-      // just because an email failed to send.
       console.error('[Automation Failure] Post-payment systems failed:', automationError);
     }
     // ---------------------------------------------------------

@@ -21,6 +21,21 @@ model Expert {
   isAvailable      Boolean   @default(true)
   bio              String?
   marketingSnippet String?
+  
+  // Affiliate Program Fields
+  referralCode     String?   @unique
+  referredById     String?
+  affiliateBalance Float     @default(0)
+  totalReferrals   Int       @default(0)
+
+  // Programmatic SEO Fields
+  seoSlug          String?   @unique
+  seoBio           String?
+  seoServices      String?   // JSON string of array of services
+  seoFaqs          String?   // JSON string of array of FAQs
+  seoMetaTitle     String?
+  seoMetaDescription String?
+
   bookings         Booking[]
 }
 
@@ -34,6 +49,7 @@ model Transaction {
   currency  String   @default("INR") // Already supports dynamic currency
   status    String   @default("CREATED") // CREATED, PAID, FAILED
   expertId  String
+  referralCode String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -44,6 +60,13 @@ model User {
   email     String    @unique
   password  String
   timezone  String?
+
+  // Affiliate Program Fields
+  referralCode     String?   @unique
+  referredById     String?
+  affiliateBalance Float     @default(0)
+  totalReferrals   Int       @default(0)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   bookings  Booking[]
@@ -62,6 +85,21 @@ model Booking {
   userId    String?
   guestName String?
   guestEmail String?
+  referralCode String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+model ReferralLog {
+  id                String   @id @default(uuid())
+  referrerId        String   // ID of Expert or User who owns code
+  referrerType      String   // "EXPERT" or "USER"
+  referredUserEmail String?
+  bookingId         String?
+  orderId           String?
+  transactionAmount Float
+  commissionEarned  Float
+  referralCodeUsed  String
+  status            String   @default("CREDITED") // CREDITED, PAID_OUT
+  createdAt         DateTime @default(now())
 }

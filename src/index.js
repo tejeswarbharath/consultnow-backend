@@ -12,6 +12,7 @@ const bookingRoutes = require('./routes/booking.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const aiRoutes = require('./routes/ai');
 const seoRoutes = require('./routes/seo.routes');
+const affiliateRoutes = require('./routes/affiliate.routes');
 const { initSocket } = require('./socket');
 
 const app = express();
@@ -30,7 +31,9 @@ app.use('/api/experts', expertRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/', seoRoutes); // Serve sitemap.xml at root level
+app.use('/api/affiliate', affiliateRoutes);
+app.use('/api/seo', seoRoutes);
+app.use('/', seoRoutes); // Also serve sitemap.xml & robots.txt at root level
 
 // Health Check Route
 app.get('/api/health', (req, res) => {

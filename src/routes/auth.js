@@ -67,4 +67,32 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// RESET PASSWORD ROUTE
+router.post('/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+
+  if (!email || !newPassword) {
+    return res.status(400).json({ error: 'Email and new password are required' });
+  }
+
+  try {
+    const expert = await prisma.expert.findUnique({ where: { email } });
+    if (!expert) {
+      return res.status(404).json({ error: 'Expert with this email was not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await prisma.expert.update({
+      where: { email },
+      data: { password: hashedPassword }
+    });
+
+    res.json({ message: 'Password updated successfully. You can now log in with your new password.' });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
 module.exports = router;

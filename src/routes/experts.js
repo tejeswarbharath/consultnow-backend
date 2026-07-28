@@ -15,7 +15,8 @@ router.get('/', async (req, res) => {
     // 1. Fetch all available experts (removed categoryId and category)
     const experts = await prisma.expert.findMany({
       where: {
-        isAvailable: true
+        isAvailable: true,
+        status: 'APPROVED'
       },
       select: {
         id: true,
@@ -115,8 +116,8 @@ router.put('/:id', authMiddleware, isExpertOwner, async (req, res) => {
     if (typeof marketingSnippet === 'string') updateData.marketingSnippet = marketingSnippet;
     if (pricePerHour !== undefined && pricePerHour !== null) {
       const parsedPrice = parseFloat(pricePerHour);
-      if (isNaN(parsedPrice) || parsedPrice < 0) {
-        return res.status(400).json({ error: 'Invalid price per hour.' });
+      if (isNaN(parsedPrice) || parsedPrice < 100) {
+        return res.status(400).json({ error: 'Minimum price per hour must be at least 100.' });
       }
       updateData.pricePerHour = parsedPrice;
     }

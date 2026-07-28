@@ -13,6 +13,11 @@ router.post('/register', async (req, res) => {
   const { name, email, password, yearsExperience, pricePerHour, subjectExpertise, currency } = req.body;
 
   try {
+    const parsedPrice = parseFloat(pricePerHour);
+    if (isNaN(parsedPrice) || parsedPrice < 100) {
+      return res.status(400).json({ error: 'Minimum price per hour must be at least 100.' });
+    }
+
     const existingExpert = await prisma.expert.findUnique({ where: { email } });
     if (existingExpert) {
       return res.status(400).json({ error: 'Email already registered' });
@@ -26,13 +31,18 @@ router.post('/register', async (req, res) => {
         email,
         password: hashedPassword,
         yearsExperience: Number(yearsExperience),
-        pricePerHour: parseFloat(pricePerHour),
+        pricePerHour: parsedPrice,
         subjectExpertise,
-        currency: currency || 'INR' // Save specific currency or fallback to INR
+        currency: currency || 'INR', // Save specific currency or fallback to INR
+        status: 'PENDING'
       }
     });
 
-    res.status(201).json({ message: 'Expert registered successfully', expertId: expert.id });
+    res.status(201).json({ 
+      message: 'Expert registered successfully. Your account is currently pending review by our team.', 
+      expertId: expert.id,
+      status: expert.status
+    });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Registration failed' });
@@ -60,7 +70,15 @@ router.post('/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    res.json({ token, expert: { id: expert.id, name: expert.name, email: expert.email } });
+    res.json({ 
+      token, 
+      expert: { 
+        id: expert.id, 
+        name: expert.name, 
+        email: expert.email, 
+        status: expert.status || 'APPROVED' 
+      } 
+    });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });

@@ -18,6 +18,7 @@ model Expert {
   pricePerHour     Float
   currency         String    @default("INR") // NEW: Currency Flexibility
   subjectExpertise String
+  status           String    @default("PENDING") // Status: PENDING, APPROVED, REJECTED, SUSPENDED
   isAvailable      Boolean   @default(true)
   bio              String?
   marketingSnippet String?

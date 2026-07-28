@@ -84,7 +84,23 @@ router.get('/stats', async (req, res) => {
       if (account) {
         let referralCode = account.referralCode;
         if (!referralCode) {
-          referralCode = `REF-${account.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)}${Math.floor(1000 + Math.random() * 9000)}`;
+          const cleanName = account.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'USER';
+          let unique = false;
+          let attempts = 0;
+          while (!unique && attempts < 10) {
+            attempts++;
+            const candidate = `REF-${cleanName}${Math.floor(1000 + Math.random() * 9000)}`;
+            const existingExp = await prisma.expert.findUnique({ where: { referralCode: candidate } });
+            const existingUsr = await prisma.user.findUnique({ where: { referralCode: candidate } });
+            if (!existingExp && !existingUsr) {
+              referralCode = candidate;
+              unique = true;
+            }
+          }
+          if (!referralCode) {
+            referralCode = `REF-${cleanName}${Date.now().toString().slice(-4)}`;
+          }
+
           if (isExpert) {
             await prisma.expert.update({ where: { id: userId }, data: { referralCode } });
           } else {

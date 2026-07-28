@@ -24,17 +24,41 @@ const createOrder = async (req, res) => {
     return res.status(503).json({ error: 'Payment gateway is not configured.' });
   }
   try {
-    const { expertId, amount, currency, guestData, referralCode } = req.body;
+    const { expertId, hoursCount, currency, guestData, referralCode } = req.body;
 
-    if (!expertId || !amount || !guestData) {
+    if (!expertId || !guestData) {
       return res.status(400).json({ error: 'Missing required checkout information.' });
     }
 
-    const subunitAmount = Math.round(amount * 100);
+    // Server-side price calculation to prevent client-side parameter tampering
+    const dbExpert = await prisma.expert.findUnique({ where: { id: expertId } });
+    if (!dbExpert) {
+      return res.status(404).json({ error: 'Expert not found.' });
+    }
+
+    const durationHours = Math.max(1, parseInt(hoursCount || 1, 10));
+    let basePrice = dbExpert.pricePerHour * durationHours;
+
+    let appliedDiscountPercent = 0;
+    let cleanCode = referralCode ? referralCode.trim().toUpperCase() : null;
+
+    if (cleanCode) {
+      const refExpert = await prisma.expert.findUnique({ where: { referralCode: cleanCode } });
+      const refUser = await prisma.user.findUnique({ where: { referralCode: cleanCode } });
+      if (refExpert || refUser) {
+        appliedDiscountPercent = 10;
+      } else {
+        cleanCode = null;
+      }
+    }
+
+    const discountAmount = Math.round((basePrice * (appliedDiscountPercent / 100)) * 100) / 100;
+    const finalCalculatedAmount = Math.max(0, basePrice - discountAmount);
+    const subunitAmount = Math.round(finalCalculatedAmount * 100);
 
     const options = {
       amount: subunitAmount,
-      currency: currency || 'INR',
+      currency: currency || dbExpert.currency || 'INR',
       receipt: `receipt_order_${Math.random().toString(36).substring(2, 15)}`,
     };
 
@@ -50,7 +74,7 @@ const createOrder = async (req, res) => {
         amount: subunitAmount,
         currency: options.currency,
         expertId: expertId,
-        referralCode: referralCode ? referralCode.trim().toUpperCase() : null,
+        referralCode: cleanCode,
         status: 'CREATED'
       }
     });
@@ -158,41 +182,49 @@ const verifyPayment = async (req, res) => {
           const referrerType = refExpert ? 'EXPERT' : (refUser ? 'USER' : null);
 
           if (referrer && referrerType) {
-            const actualAmountPaid = transactionFromDb.amount / 100;
-            const commissionEarned = Math.round((actualAmountPaid * 0.10) * 100) / 100; // 10% commission
+            // Self-referral prevention check
+            const isSelfReferral = (referrer.id === expertId) || 
+                                   (referrer.email && guestData.email && referrer.email.toLowerCase() === guestData.email.toLowerCase());
 
-            // Log referral
-            await prisma.referralLog.create({
-              data: {
-                referrerId: referrer.id,
-                referrerType: referrerType,
-                referredUserEmail: guestData.email,
-                bookingId: booking.id,
-                orderId: razorpay_order_id,
-                transactionAmount: actualAmountPaid,
-                commissionEarned: commissionEarned,
-                referralCodeUsed: code,
-                status: 'CREDITED'
+            if (!isSelfReferral) {
+              const actualAmountPaid = transactionFromDb.amount / 100;
+              const commissionEarned = Math.round((actualAmountPaid * 0.10) * 100) / 100; // 10% commission
+
+              // Log referral
+              await prisma.referralLog.create({
+                data: {
+                  referrerId: referrer.id,
+                  referrerType: referrerType,
+                  referredUserEmail: guestData.email,
+                  bookingId: booking.id,
+                  orderId: razorpay_order_id,
+                  transactionAmount: actualAmountPaid,
+                  commissionEarned: commissionEarned,
+                  referralCodeUsed: code,
+                  status: 'CREDITED'
+                }
+              });
+
+              // Update balance & total count
+              if (referrerType === 'EXPERT') {
+                await prisma.expert.update({
+                  where: { id: referrer.id },
+                  data: {
+                    affiliateBalance: { increment: commissionEarned },
+                    totalReferrals: { increment: 1 }
+                  }
+                });
+              } else {
+                await prisma.user.update({
+                  where: { id: referrer.id },
+                  data: {
+                    affiliateBalance: { increment: commissionEarned },
+                    totalReferrals: { increment: 1 }
+                  }
+                });
               }
-            });
-
-            // Update balance & total count
-            if (referrerType === 'EXPERT') {
-              await prisma.expert.update({
-                where: { id: referrer.id },
-                data: {
-                  affiliateBalance: { increment: commissionEarned },
-                  totalReferrals: { increment: 1 }
-                }
-              });
             } else {
-              await prisma.user.update({
-                where: { id: referrer.id },
-                data: {
-                  affiliateBalance: { increment: commissionEarned },
-                  totalReferrals: { increment: 1 }
-                }
-              });
+              console.warn(`[AFFILIATE] Self-referral commission blocked for code ${code}`);
             }
           }
         }

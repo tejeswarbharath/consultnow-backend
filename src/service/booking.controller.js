@@ -73,9 +73,52 @@ const requestFreeService = async (req, res) => {
   }
 };
 
+const cleanupExpiredPendingBookings = async () => {
+  try {
+    const now = new Date();
+    await prisma.booking.updateMany({
+      where: {
+        status: 'PENDING',
+        startTime: { lt: now }
+      },
+      data: {
+        status: 'EXPIRED'
+      }
+    });
+  } catch (err) {
+    console.error('Error cleaning up expired pending bookings:', err);
+  }
+};
+
 const acceptBooking = async (req, res) => {
   try {
     const { id } = req.params;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
+
+    // 1. Fetch existing booking details first for idempotency & status verification
+    const existingBooking = await prisma.booking.findUnique({
+      where: { id },
+      include: { user: true, expert: true }
+    });
+
+    if (!existingBooking) {
+      return res.status(404).send('Booking not found.');
+    }
+
+    // Idempotency check: If already processed, redirect without re-executing actions
+    if (existingBooking.status === 'ACCEPTED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=already_accepted&bookingId=${id}`);
+    }
+    if (existingBooking.status === 'REJECTED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=already_rejected&bookingId=${id}`);
+    }
+    if (existingBooking.status === 'EXPIRED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=expired&bookingId=${id}`);
+    }
+
+    const now = new Date();
+    const isLate = existingBooking.startTime && now > new Date(existingBooking.startTime);
+
     // Update booking status to 'ACCEPTED'
     const booking = await prisma.booking.update({
       where: { id },
@@ -95,9 +138,6 @@ const acceptBooking = async (req, res) => {
 
     // Determine the user's email (registered or guest)
     const userEmail = booking.user?.email || booking.guestEmail;
-
-    const now = new Date();
-    const isLate = booking.startTime && now > new Date(booking.startTime);
     const formattedTime = formatDateTime(booking.startTime);
 
     // Send confirmation email to the user/guest
@@ -142,7 +182,6 @@ const acceptBooking = async (req, res) => {
     }
 
     // Redirect the expert to a frontend success/dashboard page
-    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
     res.redirect(`${frontendUrl}/dashboard?status=accepted&bookingId=${id}`);
   } catch (error) {
     console.error('Error accepting booking:', error);
@@ -153,6 +192,29 @@ const acceptBooking = async (req, res) => {
 const rejectBooking = async (req, res) => {
   try {
     const { id } = req.params;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
+
+    // 1. Fetch existing booking details first for idempotency
+    const existingBooking = await prisma.booking.findUnique({
+      where: { id },
+      include: { user: true, expert: true }
+    });
+
+    if (!existingBooking) {
+      return res.status(404).send('Booking not found.');
+    }
+
+    // Idempotency check: If already processed, redirect without re-executing actions
+    if (existingBooking.status === 'ACCEPTED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=already_accepted&bookingId=${id}`);
+    }
+    if (existingBooking.status === 'REJECTED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=already_rejected&bookingId=${id}`);
+    }
+    if (existingBooking.status === 'EXPIRED') {
+      return res.redirect(`${frontendUrl}/dashboard?status=expired&bookingId=${id}`);
+    }
+
     // Update booking status to 'REJECTED'
     const booking = await prisma.booking.update({
       where: { id },
@@ -193,7 +255,6 @@ const rejectBooking = async (req, res) => {
     }
 
     // Redirect the expert to a frontend confirmation page
-    const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
     res.redirect(`${frontendUrl}/dashboard?status=rejected&bookingId=${id}`);
   } catch (error) {
     console.error('Error rejecting booking:', error);
@@ -204,6 +265,7 @@ const rejectBooking = async (req, res) => {
 const getExpertAvailability = async (req, res) => {
   try {
     const { expertId } = req.params;
+    await cleanupExpiredPendingBookings();
     const availableSlots = await getAvailability(expertId);
     res.json(availableSlots);
   } catch (error) {

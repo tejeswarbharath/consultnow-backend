@@ -86,6 +86,7 @@ router.get('/:id', async (req, res) => {
         yearsExperience: true,
         pricePerHour: true,
         subjectExpertise: true,
+        status: true,
         isAvailable: true,
         bio: true,
         marketingSnippet: true,

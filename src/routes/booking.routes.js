@@ -1,6 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { requestFreeService, acceptBooking, rejectBooking, getExpertAvailability } = require('../service/booking.controller');
+const { 
+  requestFreeService, 
+  acceptBooking, 
+  rejectBooking, 
+  getExpertAvailability,
+  generateBookingSynopsis,
+  getBookingSynopsis
+} = require('../service/booking.controller');
 
 // POST /api/bookings/free-request
 // Should be protected by auth middleware to capture req.user
@@ -16,5 +23,11 @@ router.get('/reject/:id', rejectBooking);
 
 // GET /api/bookings/availability/:expertId
 router.get('/availability/:expertId', getExpertAvailability);
+
+// POST /api/bookings/:id/synopsis - Generates synopsis & emails expert (BCC no-reply@consultnow.in)
+router.post('/:id/synopsis', generateBookingSynopsis);
+
+// GET /api/bookings/:id/synopsis - Retrieves synopsis
+router.get('/:id/synopsis', getBookingSynopsis);
 
 module.exports = router;

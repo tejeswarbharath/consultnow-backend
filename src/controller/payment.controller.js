@@ -234,6 +234,11 @@ const verifyPayment = async (req, res) => {
 
         const meetLink = await createMeeting(expert.email, guestData.email, summary, desc, startTime, endTime);
 
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: { meetLink: meetLink }
+        });
+
         await sendBookingConfirmation(guestData.email, guestData.name, expert.name, meetLink, startTime);
       }
     } catch (automationError) {

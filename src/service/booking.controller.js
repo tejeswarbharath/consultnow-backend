@@ -1,5 +1,6 @@
-const { sendEmail } = require('../service/email.service');
+const { sendEmail, sendMeetingSynopsisEmail } = require('../service/email.service');
 const { createMeeting, getAvailability } = require('../service/calendar.service');
+const { generateMeetingSynopsis } = require('../service/ai.service');
 const prisma = require('../prisma');
 
 const formatDateTime = (date) => {
@@ -63,7 +64,34 @@ const requestFreeService = async (req, res) => {
     try {
       await sendEmail(expert.email, subject, html);
     } catch (emailError) {
-      console.error('[ConsultNow Email] Failed to send free consultation request email:', emailError);
+      console.error('[ConsultNow Email] Failed to send free consultation request email to expert:', emailError);
+    }
+
+    // 5. Send acknowledgement email to the User/Guest with synopsis evaluation notice
+    if (guestData?.email) {
+      const userSubject = `Consultation Requested: ${expert.name}`;
+      const userHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+          <div style="background-color: #2563eb; padding: 20px; text-align: center; color: white;">
+            <h2>Consultation Request Submitted</h2>
+          </div>
+          <div style="padding: 20px; color: #333;">
+            <p>Hello <strong>${guestData.name || 'there'}</strong>,</p>
+            <p>Your request for a Free 1-Hour Consultation session with <strong>${expert.name}</strong> has been submitted.</p>
+            <p><strong>Proposed Date & Time:</strong> ${formattedTime} (IST)</p>
+            <p>The expert will review your request and confirm your Google Meet session soon.</p>
+            
+            <div style="margin-top: 15px; padding: 12px; background-color: #eff6ff; border-radius: 6px; border-left: 4px solid #2563eb;">
+              <p style="margin: 0; font-size: 13px; color: #1e40af; line-height: 1.5;"><strong>Notice:</strong> Please be informed that the meeting synopsis will be used by ConsultNow for further evaluation metrics.</p>
+            </div>
+          </div>
+        </div>
+      `;
+      try {
+        await sendEmail(guestData.email, userSubject, userHtml);
+      } catch (userEmailError) {
+        console.error('[ConsultNow Email] Failed to send request confirmation email to guest:', userEmailError);
+      }
     }
 
     res.status(200).json({ message: 'Free service requested successfully. Notification sent to expert.' });
@@ -119,26 +147,35 @@ const acceptBooking = async (req, res) => {
     const now = new Date();
     const isLate = existingBooking.startTime && now > new Date(existingBooking.startTime);
 
-    // Update booking status to 'ACCEPTED'
-    const booking = await prisma.booking.update({
-      where: { id },
-      data: { status: 'ACCEPTED' },
-      include: { user: true, expert: true }
-    });
-
     // Create a Google Meet link
     const meetingLink = await createMeeting(
-      booking.expert.email,
-      booking.user?.email || booking.guestEmail,
+      existingBooking.expert.email,
+      existingBooking.user?.email || existingBooking.guestEmail,
       'Consultation Session',
-      booking.details,
-      booking.startTime,
-      booking.endTime
+      existingBooking.details,
+      existingBooking.startTime,
+      existingBooking.endTime
     );
+
+    // Update booking status to 'ACCEPTED' and save meetLink
+    const booking = await prisma.booking.update({
+      where: { id },
+      data: { 
+        status: 'ACCEPTED',
+        meetLink: meetingLink
+      },
+      include: { user: true, expert: true }
+    });
 
     // Determine the user's email (registered or guest)
     const userEmail = booking.user?.email || booking.guestEmail;
     const formattedTime = formatDateTime(booking.startTime);
+
+    const synopsisNoticeHtml = `
+      <div style="margin-top: 15px; padding: 12px; background-color: #eff6ff; border-radius: 6px; border-left: 4px solid #2563eb;">
+        <p style="margin: 0; font-size: 13px; color: #1e40af; line-height: 1.5;"><strong>Notice:</strong> Please be informed that the meeting synopsis will be used by ConsultNow for further evaluation metrics.</p>
+      </div>
+    `;
 
     // Send confirmation email to the user/guest
     if (userEmail) {
@@ -150,6 +187,7 @@ const acceptBooking = async (req, res) => {
           <p>Your 1-hour consultation request with <strong>${booking.expert.name}</strong> was approved.</p>
           <p><strong>⚠️ Warning:</strong> This approval was received after your proposed slot (<strong>${formattedTime}</strong>) had already passed.</p>
           <p>You can still join the Google Meet link here to see if the expert is available: <a href="${meetingLink}">${meetingLink}</a>, or we recommend booking a new session on the platform.</p>
+          ${synopsisNoticeHtml}
         `;
       } else {
         userSubject = 'Your Consultation is Confirmed!';
@@ -158,6 +196,7 @@ const acceptBooking = async (req, res) => {
           <p>Your 1-hour consultation with <strong>${booking.expert.name}</strong> has been confirmed.</p>
           <p><strong>Scheduled Time:</strong> ${formattedTime} (IST)</p>
           <p>Join the meeting here: <a href="${meetingLink}">${meetingLink}</a></p>
+          ${synopsisNoticeHtml}
         `;
       }
       try {
@@ -274,9 +313,119 @@ const getExpertAvailability = async (req, res) => {
   }
 };
 
+/**
+ * Core processor for generating meeting synopsis and sending post-call email with BCC to no-reply@consultnow.in
+ */
+const processPostMeetingSynopsis = async (bookingId, transcriptOrNotes = '') => {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { expert: true, user: true }
+  });
+
+  if (!booking) {
+    throw new Error(`Booking ${bookingId} not found`);
+  }
+
+  if (booking.synopsisSent) {
+    console.log(`[Synopsis] Post-meeting synopsis email already sent for booking: ${bookingId}`);
+    return booking;
+  }
+
+  const guestName = booking.user?.name || booking.guestName || 'Client Guest';
+  const expertName = booking.expert.name;
+  const bookingType = booking.type === 'FREE_1_HOUR' ? 'Free 1-Hour Consultation' : 'Paid 1-Hour Consultation';
+
+  // 1. Generate AI Meeting Synopsis & Evaluation Metrics
+  const synopsisContent = await generateMeetingSynopsis({
+    guestName,
+    expertName,
+    bookingType,
+    details: booking.details,
+    startTime: booking.startTime
+  }, transcriptOrNotes);
+
+  // 2. Save synopsis & mark synopsisSent in Database
+  const updatedBooking = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      synopsis: synopsisContent,
+      synopsisSent: true,
+      status: 'COMPLETED'
+    }
+  });
+
+  // 3. Dispatch automated post-meeting email to expert with BCC to no-reply@consultnow.in
+  try {
+    await sendMeetingSynopsisEmail(
+      booking.expert.email,
+      expertName,
+      guestName,
+      bookingType,
+      synopsisContent,
+      booking.meetLink
+    );
+  } catch (emailErr) {
+    console.error(`[Synopsis] Failed to dispatch email for booking ${bookingId}:`, emailErr.message);
+  }
+
+  return updatedBooking;
+};
+
+/**
+ * Controller endpoint to manually or programmatically generate synopsis post-call
+ */
+const generateBookingSynopsis = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { transcript } = req.body || {};
+
+    const result = await processPostMeetingSynopsis(id, transcript || '');
+    res.status(200).json({
+      message: 'Meeting synopsis generated and post-call email sent to expert (BCC no-reply@consultnow.in).',
+      synopsis: result.synopsis
+    });
+  } catch (error) {
+    console.error('Error generating booking synopsis:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate meeting synopsis' });
+  }
+};
+
+/**
+ * Controller endpoint to retrieve meeting synopsis for a booking
+ */
+const getBookingSynopsis = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        type: true,
+        meetLink: true,
+        synopsis: true,
+        synopsisSent: true,
+        updatedAt: true
+      }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    res.json(booking);
+  } catch (error) {
+    console.error('Error getting booking synopsis:', error);
+    res.status(500).json({ error: 'Failed to retrieve booking synopsis' });
+  }
+};
+
 module.exports = {
   requestFreeService,
   acceptBooking,
   rejectBooking,
-  getExpertAvailability
+  getExpertAvailability,
+  processPostMeetingSynopsis,
+  generateBookingSynopsis,
+  getBookingSynopsis
 };

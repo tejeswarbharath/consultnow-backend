@@ -74,21 +74,24 @@ model User {
 }
 
 model Booking {
-  id        String    @id @default(uuid())
-  status    String
-  type      String
-  details   String?
-  startTime DateTime?
-  endTime   DateTime?
-  expert    Expert    @relation(fields: [expertId], references: [id])
-  expertId  String
-  user      User?     @relation(fields: [userId], references: [id])
-  userId    String?
-  guestName String?
-  guestEmail String?
+  id           String    @id @default(uuid())
+  status       String
+  type         String
+  details      String?
+  startTime    DateTime?
+  endTime      DateTime?
+  expert       Expert    @relation(fields: [expertId], references: [id])
+  expertId     String
+  user         User?     @relation(fields: [userId], references: [id])
+  userId       String?
+  guestName    String?
+  guestEmail   String?
   referralCode String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  meetLink     String?
+  synopsis     String?
+  synopsisSent Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model ReferralLog {

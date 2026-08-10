@@ -1,4 +1,4 @@
-const { sendEmail, sendMeetingSynopsisEmail } = require('../service/email.service');
+const { sendEmail, sendMeetingSynopsisEmail, sendFeedbackRequestEmail } = require('../service/email.service');
 const { createMeeting, getAvailability } = require('../service/calendar.service');
 const { generateMeetingSynopsis } = require('../service/ai.service');
 const prisma = require('../prisma');
@@ -368,7 +368,60 @@ const processPostMeetingSynopsis = async (bookingId, transcriptOrNotes = '') => 
     console.error(`[Synopsis] Failed to dispatch email for booking ${bookingId}:`, emailErr.message);
   }
 
+  // 4. Dispatch automated feedback request email to user to collect review & ratings
+  const userEmail = booking.user?.email || booking.guestEmail;
+  if (userEmail) {
+    try {
+      await sendFeedbackRequestEmail(
+        userEmail,
+        guestName,
+        expertName,
+        bookingId,
+        booking.expert.id
+      );
+    } catch (feedbackEmailErr) {
+      console.error(`[Feedback] Failed to dispatch feedback request email for booking ${bookingId}:`, feedbackEmailErr.message);
+    }
+  }
+
   return updatedBooking;
+};
+
+/**
+ * Controller endpoint to manually trigger post-consultation feedback email to user
+ */
+const triggerFeedbackEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: { expert: true, user: true }
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+
+    const userEmail = booking.user?.email || booking.guestEmail;
+    const userName = booking.user?.name || booking.guestName || 'Client';
+
+    if (!userEmail) {
+      return res.status(400).json({ error: 'No user or guest email associated with this booking.' });
+    }
+
+    await sendFeedbackRequestEmail(
+      userEmail,
+      userName,
+      booking.expert.name,
+      booking.id,
+      booking.expert.id
+    );
+
+    res.status(200).json({ message: 'Feedback request email sent successfully to client.' });
+  } catch (error) {
+    console.error('Error triggering feedback email:', error);
+    res.status(500).json({ error: 'Failed to send feedback request email' });
+  }
 };
 
 /**
@@ -427,5 +480,6 @@ module.exports = {
   getExpertAvailability,
   processPostMeetingSynopsis,
   generateBookingSynopsis,
-  getBookingSynopsis
+  getBookingSynopsis,
+  triggerFeedbackEmail
 };

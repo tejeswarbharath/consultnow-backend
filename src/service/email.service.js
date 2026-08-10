@@ -155,9 +155,135 @@ const sendMeetingSynopsisEmail = async (expertEmail, expertName, guestName, book
   }
 };
 
+/**
+ * Sends post-consultation feedback request email to user with link to feedback form
+ */
+const sendFeedbackRequestEmail = async (userEmail, userName, expertName, bookingId, expertId) => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://consultnow.in';
+  const feedbackLink = `${frontendUrl}/feedback?expertId=${expertId || ''}&userName=${encodeURIComponent(userName || '')}&bookingId=${bookingId || ''}`;
+
+  const mailOptions = {
+    from: `"ConsultNow Feedback" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to: userEmail,
+    subject: `How was your consultation with ${expertName}? Share your feedback`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background-color: #ffffff;">
+        <div style="background-color: #2563eb; padding: 24px; text-align: center; color: white;">
+          <h2 style="margin: 0; font-size: 22px;">We Value Your Feedback!</h2>
+          <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Tell us about your recent consultation session</p>
+        </div>
+        <div style="padding: 24px; color: #374151;">
+          <p>Hello <strong>${userName || 'Valued Client'}</strong>,</p>
+          <p>Thank you for completing your consultation session with <strong>${expertName}</strong> on ConsultNow!</p>
+          <p>We hope the session provided valuable insights for your query. Please take 1 minute to rate your experience and leave your feedback for <strong>${expertName}</strong>.</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${feedbackLink}" style="background-color: #2563eb; color: white; padding: 14px 32px; font-weight: bold; border-radius: 8px; text-decoration: none; display: inline-block; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">
+              Submit Feedback & Rating
+            </a>
+          </div>
+
+          <p style="font-size: 13px; color: #6b7280; text-align: center;">
+            Or copy and paste this link into your browser:<br/>
+            <a href="${feedbackLink}" style="color: #2563eb; word-break: break-all;">${feedbackLink}</a>
+          </p>
+          
+          <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+          <p style="font-size: 12px; color: #9ca3af; text-align: center;">
+            © ConsultNow • Your feedback helps us maintain top expert quality
+          </p>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[ConsultNow Email] Feedback request sent to user:', userEmail, 'Message ID:', info.messageId);
+    return info;
+  } catch (error) {
+    console.error('[ConsultNow Email] Error sending feedback request email:', error);
+  }
+};
+
+/**
+ * Sends notification email to no-reply@consultnow.in when a new expert registers
+ */
+const sendExpertRegistrationNotification = async (expert) => {
+  const adminEmail = 'no-reply@consultnow.in';
+  
+  const mailOptions = {
+    from: `"ConsultNow Admin System" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
+    to: adminEmail,
+    subject: `New Expert Registration: ${expert.name} (${expert.subjectExpertise})`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background-color: #ffffff;">
+        <div style="background-color: #0f172a; padding: 24px; text-align: center; color: white;">
+          <h2 style="margin: 0; font-size: 22px;">New Expert Registration Alert</h2>
+          <p style="margin: 6px 0 0 0; font-size: 14px; color: #94a3b8;">A new professional consultant has registered on ConsultNow</p>
+        </div>
+        <div style="padding: 24px; color: #334155;">
+          <h3 style="color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 6px; margin-top: 0;">Expert Registration Details</h3>
+          
+          <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b; width: 35%;">Full Name:</td>
+              <td style="padding: 10px; font-weight: bold; color: #0f172a;">${expert.name}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Email Address:</td>
+              <td style="padding: 10px; color: #2563eb;">${expert.email}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Subject Expertise:</td>
+              <td style="padding: 10px; color: #0f172a;">${expert.subjectExpertise}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Years of Experience:</td>
+              <td style="padding: 10px; color: #0f172a;">${expert.yearsExperience} Years</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Hourly Rate:</td>
+              <td style="padding: 10px; color: #16a34a; font-weight: bold;">₹${expert.pricePerHour} / hour (${expert.currency || 'INR'})</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Account Status:</td>
+              <td style="padding: 10px;"><span style="background-color: #fef3c7; color: #d97706; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px;">${expert.status || 'PENDING'}</span></td>
+            </tr>
+            <tr style="border-bottom: 1px solid #f1f5f9;">
+              <td style="padding: 10px; font-weight: bold; color: #64748b;">Expert ID:</td>
+              <td style="padding: 10px; font-family: monospace; color: #475569;">${expert.id}</td>
+            </tr>
+          </table>
+
+          <div style="margin-top: 24px; padding: 14px; background-color: #f8fafc; border-left: 4px solid #0f172a; border-radius: 4px;">
+            <p style="margin: 0; font-size: 13px; color: #475569;">
+              <strong>Admin Action Required:</strong> Please review the new expert profile in the ConsultNow admin portal to verify and approve their consultation services.
+            </p>
+          </div>
+
+          <p style="margin-top: 24px; font-size: 12px; color: #94a3b8; text-align: center;">
+            Automated Alert System • ConsultNow Platform
+          </p>
+        </div>
+      </div>
+    `
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[ConsultNow Email] New expert registration alert sent to no-reply@consultnow.in. Message ID:', info.messageId);
+    return info;
+  } catch (error) {
+    console.error('[ConsultNow Email] Error sending expert registration email to no-reply@consultnow.in:', error);
+  }
+};
+
 module.exports = {
   sendEmail,
   sendBookingConfirmation,
   sendMeetingSynopsisEmail,
+  sendFeedbackRequestEmail,
+  sendExpertRegistrationNotification,
   verifySmtpConnection
 };

@@ -6,7 +6,8 @@ const {
   rejectBooking, 
   getExpertAvailability,
   generateBookingSynopsis,
-  getBookingSynopsis
+  getBookingSynopsis,
+  triggerFeedbackEmail
 } = require('../service/booking.controller');
 
 // POST /api/bookings/free-request
@@ -22,6 +23,7 @@ router.get('/accept/:id', acceptBooking);
 router.get('/reject/:id', rejectBooking);
 
 // GET /api/bookings/availability/:expertId
+// Retrieves expert availability
 router.get('/availability/:expertId', getExpertAvailability);
 
 // POST /api/bookings/:id/synopsis - Generates synopsis & emails expert (BCC no-reply@consultnow.in)
@@ -29,5 +31,8 @@ router.post('/:id/synopsis', generateBookingSynopsis);
 
 // GET /api/bookings/:id/synopsis - Retrieves synopsis
 router.get('/:id/synopsis', getBookingSynopsis);
+
+// POST /api/bookings/:id/send-feedback - Dispatches post-consultation feedback request email to user
+router.post('/:id/send-feedback', triggerFeedbackEmail);
 
 module.exports = router;

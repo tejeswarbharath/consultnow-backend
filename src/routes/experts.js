@@ -97,7 +97,44 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Expert not found' });
     }
 
-    res.json(expert);
+    // Calculate completed/active sessions count (free & paid consultation session bookings)
+    const completedSessions = await prisma.booking.count({
+      where: {
+        expertId: id,
+        status: { in: ['ACCEPTED', 'PAID', 'COMPLETED', 'PENDING'] }
+      }
+    });
+
+    // Calculate total verified earnings in INR
+    const earningsResult = await prisma.transaction.aggregate({
+      _sum: { amount: true },
+      where: {
+        expertId: id,
+        status: 'PAID'
+      }
+    });
+    const totalEarnings = Math.round((earningsResult._sum.amount || 0) / 100);
+
+    // Calculate average rating & total reviews from client feedbacks
+    let rating = 0;
+    let reviewCount = 0;
+    if (prisma.feedback) {
+      const feedbackAgg = await prisma.feedback.aggregate({
+        _avg: { rating: true },
+        _count: { id: true },
+        where: { expertId: id }
+      });
+      rating = feedbackAgg._avg?.rating ? Math.round(feedbackAgg._avg.rating * 10) / 10 : 0;
+      reviewCount = feedbackAgg._count?.id || 0;
+    }
+
+    res.json({
+      ...expert,
+      completedSessions,
+      totalEarnings,
+      rating,
+      reviewCount
+    });
   } catch (error) {
     console.error('Error fetching expert:', error);
     res.status(500).json({ error: 'Failed to fetch expert' });

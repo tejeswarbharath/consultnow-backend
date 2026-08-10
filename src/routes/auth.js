@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../prisma');
+const { sendExpertRegistrationNotification } = require('../service/email.service');
 
 const router = express.Router();
 
@@ -37,6 +38,13 @@ router.post('/register', async (req, res) => {
         status: 'PENDING'
       }
     });
+
+    // Send notification email to no-reply@consultnow.in with expert registration details
+    try {
+      await sendExpertRegistrationNotification(expert);
+    } catch (emailErr) {
+      console.error('[Registration] Failed to send expert registration notification email:', emailErr);
+    }
 
     res.status(201).json({ 
       message: 'Expert registered successfully. Your account is currently pending review by our team.', 

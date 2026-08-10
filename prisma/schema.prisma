@@ -38,6 +38,7 @@ model Expert {
   seoMetaDescription String?
 
   bookings         Booking[]
+  feedbacks        Feedback[]
 }
 
 // Payment Transactions
@@ -106,4 +107,15 @@ model ReferralLog {
   referralCodeUsed  String
   status            String   @default("CREDITED") // CREDITED, PAID_OUT
   createdAt         DateTime @default(now())
+}
+
+model Feedback {
+  id           String   @id @default(uuid())
+  expert       Expert   @relation(fields: [expertId], references: [id])
+  expertId     String
+  clientName   String
+  rating       Int      // 1 to 5 stars
+  comment      String   // feedback text box statement
+  keywords     String?  // JSON string array of extracted word bubbles
+  createdAt    DateTime @default(now())
 }

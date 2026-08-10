@@ -604,6 +604,51 @@ const generateMeetingSynopsis = async (bookingDetails, transcriptOrNotes = '') =
   }
 };
 
+/**
+ * Analyzes a client feedback statement to extract key descriptor words/phrases (word bubbles)
+ */
+const analyzeFeedbackStatement = async (comment) => {
+  if (!comment || typeof comment !== 'string' || comment.trim().length === 0) {
+    return ['Great Session', 'Recommended'];
+  }
+
+  try {
+    const model = getModel();
+    const prompt = `
+      Analyze the following client feedback statement for an expert consultant:
+      "${comment}"
+
+      Task:
+      Extract 3 to 6 key descriptor words or short phrases (1-2 words each) that summarize the key qualities, topics, or praise mentioned by the client (e.g. "Insightful", "Punctual", "Clear Guidance", "Great Listener", "Expert Advice", "Patient", "Highly Recommended").
+
+      Return ONLY a JSON array of strings, with proper capital casing. Do NOT include markdown code fences or extra text.
+      Example format: ["Insightful", "Clear Guidance", "Punctual", "Expert Advice"]
+    `;
+
+    const response = await generateWithRetry(model, prompt);
+    let text = response.text().trim();
+    text = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+
+    const keywords = JSON.parse(text);
+    if (Array.isArray(keywords) && keywords.length > 0) {
+      return keywords.map(k => String(k).trim()).filter(Boolean).slice(0, 6);
+    }
+  } catch (error) {
+    console.warn('[ConsultNow AI] Feedback analysis fallback triggered:', error.message);
+  }
+
+  // Fallback heuristic extraction if Gemini is unavailable or errors out
+  const words = comment.replace(/[^\w\s]/gi, '').split(/\s+/);
+  const stopWords = new Set(['the','and','a','to','of','in','i','is','that','for','it','as','was','with','on','are','this','be','have','from','at','or','by','an','my','so','very','much','good','great','session','service']);
+  const filtered = words.filter(w => w.length > 3 && !stopWords.has(w.toLowerCase()));
+  const capitalized = [...new Set(filtered.map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))];
+  
+  if (capitalized.length > 0) {
+    return capitalized.slice(0, 5);
+  }
+  return ['Insightful', 'Helpful', 'Great Guidance'];
+};
+
 // Export all AI methods
 module.exports = {
   triageProblem,
@@ -615,5 +660,6 @@ module.exports = {
   generateFollowUp,
   recommendPricing,
   generateSeoProfile,
-  generateMeetingSynopsis
+  generateMeetingSynopsis,
+  analyzeFeedbackStatement
 };

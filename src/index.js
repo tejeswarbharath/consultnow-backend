@@ -14,6 +14,7 @@ const aiRoutes = require('./routes/ai');
 const seoRoutes = require('./routes/seo.routes');
 const affiliateRoutes = require('./routes/affiliate.routes');
 const adminRoutes = require('./routes/admin.routes');
+const feedbackRoutes = require('./routes/feedback.routes');
 const { initSocket } = require('./socket');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/payment', paymentRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/affiliate', affiliateRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/feedback', feedbackRoutes);
 app.use('/api/seo', seoRoutes);
 app.use('/', seoRoutes); // Also serve sitemap.xml & robots.txt at root level
 

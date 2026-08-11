@@ -17,7 +17,7 @@ if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
 }
 
 /**
- * Step 1: Create a secure Razorpay Order
+ * Step 1: Create a secure Razorpay Order (Supports INR & USD for PayPal)
  */
 const createOrder = async (req, res) => {
   if (!razorpay) {
@@ -37,7 +37,15 @@ const createOrder = async (req, res) => {
     }
 
     const durationHours = Math.max(1, parseInt(hoursCount || 1, 10));
-    let basePrice = dbExpert.pricePerHour * durationHours;
+    let basePriceInINR = dbExpert.pricePerHour * durationHours;
+
+    const targetCurrency = (currency || dbExpert.currency || 'INR').toUpperCase();
+    const INR_TO_USD_RATE = 0.012; // 1 INR ≈ 0.012 USD (~$12 for ₹1000)
+
+    let calculatedBaseAmount = basePriceInINR;
+    if (targetCurrency === 'USD' && (dbExpert.currency || 'INR') === 'INR') {
+      calculatedBaseAmount = Math.max(1, Math.round(basePriceInINR * INR_TO_USD_RATE));
+    }
 
     let appliedDiscountPercent = 0;
     let cleanCode = referralCode ? referralCode.trim().toUpperCase() : null;
@@ -52,13 +60,14 @@ const createOrder = async (req, res) => {
       }
     }
 
-    const discountAmount = Math.round((basePrice * (appliedDiscountPercent / 100)) * 100) / 100;
-    const finalCalculatedAmount = Math.max(0, basePrice - discountAmount);
+    const discountAmount = Math.round((calculatedBaseAmount * (appliedDiscountPercent / 100)) * 100) / 100;
+    const finalCalculatedAmount = Math.max(0, calculatedBaseAmount - discountAmount);
+    // Subunits: Cents for USD, Paise for INR
     const subunitAmount = Math.round(finalCalculatedAmount * 100);
 
     const options = {
       amount: subunitAmount,
-      currency: currency || dbExpert.currency || 'INR',
+      currency: targetCurrency,
       receipt: `receipt_order_${Math.random().toString(36).substring(2, 15)}`,
     };
 

@@ -85,6 +85,10 @@ const sendEmail = async (to, subject, html, options = {}) => {
     html,
   };
 
+  if (options.cc) {
+    mailOptions.cc = options.cc;
+  }
+
   if (options.bcc) {
     mailOptions.bcc = options.bcc;
   }
@@ -207,7 +211,7 @@ const sendFeedbackRequestEmail = async (userEmail, userName, expertName, booking
 };
 
 /**
- * Sends notification email to no-reply@consultnow.in when a new expert registers
+ * Sends notification email to no-reply@consultnow.in when a new expert registers (with CC to expert email)
  */
 const sendExpertRegistrationNotification = async (expert) => {
   const adminEmail = 'no-reply@consultnow.in';
@@ -215,6 +219,7 @@ const sendExpertRegistrationNotification = async (expert) => {
   const mailOptions = {
     from: `"ConsultNow Admin System" <${process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER}>`,
     to: adminEmail,
+    cc: expert.email,
     subject: `New Expert Registration: ${expert.name} (${expert.subjectExpertise})`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; background-color: #ffffff;">

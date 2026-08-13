@@ -87,7 +87,7 @@ const getSeoProfileBySlug = async (req, res) => {
 const getSitemap = async (req, res) => {
   try {
     const experts = await prisma.expert.findMany({
-      where: { isAvailable: true },
+      where: { isAvailable: true, status: 'APPROVED' },
       select: { id: true, seoSlug: true }
     });
 

@@ -10,10 +10,14 @@ const { analyzeFeedbackStatement } = require('../service/ai.service');
 router.get('/experts-list', async (req, res) => {
   try {
     const experts = await prisma.expert.findMany({
+      where: {
+        status: 'APPROVED'
+      },
       select: {
         id: true,
         name: true,
-        subjectExpertise: true
+        subjectExpertise: true,
+        status: true
       },
       orderBy: {
         name: 'asc'

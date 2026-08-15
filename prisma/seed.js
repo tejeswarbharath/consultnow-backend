@@ -1,27 +1,8 @@
 const prisma = require('../src/prisma');
 
 async function main() {
-  console.log('Start seeding...');
-
-  // 1. Create Categories
-  const categoriesData = [
-    { name: 'Student Tutoring Services', description: 'Academic help and tutoring for students.' },
-    { name: 'IT Career Guidance', description: 'Mentorship and advice for tech careers.' },
-    { name: 'HR Services', description: 'Human resources consulting and advice.' }
-  ];
-
-  const categories = {};
-  for (const catData of categoriesData) {
-    const category = await prisma.category.upsert({
-      where: { name: catData.name },
-      update: {},
-      create: catData,
-    });
-    categories[category.name] = category;
-    console.log(`Upserted category: ${category.name}`);
-  }
-
-  console.log('Seeding finished.');
+  console.log('Seed process initialized. No dummy expert data is seeded.');
+  console.log('Real expert accounts will be registered dynamically via the platform.');
 }
 
 main()

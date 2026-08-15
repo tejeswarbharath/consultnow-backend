@@ -12,11 +12,14 @@ router.get('/', async (req, res) => {
   const { categoryId, search, subjectExpertise, groupBy } = req.query;
 
   try {
-    // 1. Fetch all available experts (removed categoryId and category)
+    // 1. Fetch all available experts (ordered by experience desc so top experienced experts appear first)
     const experts = await prisma.expert.findMany({
       where: {
         isAvailable: true,
         status: 'APPROVED'
+      },
+      orderBy: {
+        yearsExperience: 'desc'
       },
       select: {
         id: true,
@@ -28,8 +31,6 @@ router.get('/', async (req, res) => {
         isAvailable: true,
         bio: true,
         marketingSnippet: true
-        // ❌ categoryId: true (REMOVED)
-        // ❌ category: true (REMOVED)
       }
     });
 

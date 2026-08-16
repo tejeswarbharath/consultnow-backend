@@ -47,14 +47,14 @@ router.post('/generate-marketing', authMiddleware, async (req, res) => {
   try {
     const { skills } = req.body;
     
-    // FIX: Extract 'expertId' exactly as it was signed in the JWT during login
-    const expertId = req.user.expertId; 
+    // Extract expertId from token payload flexible keys
+    const expertId = req.user ? (req.user.expertId || req.user.id || req.user.sub) : null;
     
-    if (!expertId) {
-      return res.status(401).json({ error: 'Unauthorized: Missing expertId in token' });
+    if (!skills || !skills.trim()) {
+      return res.status(400).json({ error: 'Skills and background description are required.' });
     }
 
-    // Call the service, which updates the DB and returns the JSON
+    // Call the service, which updates the DB if expertId exists and returns the JSON
     const marketingMaterial = await aiService.generateMarketing(skills, expertId);
     
     res.json(marketingMaterial);

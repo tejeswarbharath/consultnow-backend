@@ -5,13 +5,17 @@ const prisma = require('../prisma');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 /**
- * Get the generative model
+ * Get the generative model with optional JSON response format
  */
-const getModel = (modelName = 'gemini-2.5-flash') => {
+const getModel = (modelName = 'gemini-2.5-flash', jsonMode = false) => {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not defined in the environment variables.");
   }
-  return genAI.getGenerativeModel({ model: modelName });
+  const config = { model: modelName };
+  if (jsonMode) {
+    config.generationConfig = { responseMimeType: "application/json" };
+  }
+  return genAI.getGenerativeModel(config);
 };
 
 /**
@@ -20,10 +24,33 @@ const getModel = (modelName = 'gemini-2.5-flash') => {
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Helper: Robustly parse JSON from Gemini text response
+ */
+const parseGeminiJson = (rawText) => {
+  if (!rawText) return {};
+  let text = rawText.trim();
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    text = text.substring(firstBrace, lastBrace + 1);
+  } else {
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      text = text.substring(firstBracket, lastBracket + 1);
+    }
+  }
+
+  return JSON.parse(text);
+};
+
+/**
  * Helper: Execute Gemini call with Exponential Backoff
  */
-const generateWithRetry = async (model, prompt, maxRetries = 4) => {
-  let baseDelay = 2000; // Start with a 2-second delay
+const generateWithRetry = async (model, prompt, maxRetries = 3) => {
+  let baseDelay = 1000; // Start with a 1-second delay for faster responsiveness
 
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -55,7 +82,7 @@ const generateWithRetry = async (model, prompt, maxRetries = 4) => {
  */
 const triageProblem = async (problemDescription) => {
   try {
-    const model = getModel();
+    const model = getModel('gemini-2.5-flash', true);
     const prompt = `
       You are an AI support agent for ConsultNow, a professional services platform.
       The platform has 3 categories of expert services:
@@ -70,19 +97,18 @@ const triageProblem = async (problemDescription) => {
       1. Classify the problem into one of the 3 categories above. Choose the closest match.
       2. Generate a brief 1-2 sentence reason for your classification.
 
-      Return the response STRICTLY as a JSON object with the following keys. Do NOT wrap the JSON in markdown code blocks:
+      Return the response STRICTLY as a JSON object with the following keys:
       {
         "category": "One of the 3 exact category names listed above",
-        "reason": "Brief reason why",
+        "reason": "Brief reason why"
       }
     `;
 
     const response = await generateWithRetry(model, prompt);
-    let text = response.text().trim();
-    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    const text = response.text().trim();
     
     try {
-      return JSON.parse(text);
+      return parseGeminiJson(text);
     } catch (parseError) {
       console.warn("Failed to parse Gemini triage response as JSON, fallback parsing", parseError, "Text was:", text);
       let matchedCategory = "Student Tutoring Services";
@@ -111,7 +137,7 @@ const triageProblem = async (problemDescription) => {
  * Generate marketing bio and snippet for an expert
  */
 const generateMarketing = async (skills, expertId) => {
-  const model = getModel();
+  const model = getModel('gemini-2.5-flash', true);
   const prompt = `
     An expert has provided the following skills, experience, and background:
     "${skills}"
@@ -126,39 +152,44 @@ const generateMarketing = async (skills, expertId) => {
     - Impact: The client reading this should feel like a genuine, approachable, down-to-earth human expert is speaking directly to them right now. Focus on clear skills, practical outcomes, and real-world experience.
 
     Return the response strictly as a JSON object with two keys: "bio" and "marketingSnippet".
-    Do not wrap the JSON in markdown code blocks.
   `;
 
   const response = await generateWithRetry(model, prompt);
-  let text = response.text();
-  
-  text = text.replace(/^```json\n/, '').replace(/\n```$/, '').trim();
+  const rawText = response.text();
   
   let marketingMaterial;
 
   try {
-    marketingMaterial = JSON.parse(text);
+    marketingMaterial = parseGeminiJson(rawText);
+    if (!marketingMaterial.bio && marketingMaterial.professionalBio) {
+      marketingMaterial.bio = marketingMaterial.professionalBio;
+    }
+    if (!marketingMaterial.marketingSnippet && marketingMaterial.serviceDescription) {
+      marketingMaterial.marketingSnippet = marketingMaterial.serviceDescription;
+    }
   } catch (error) {
     console.warn("Failed to parse Gemini response as JSON. Falling back to raw text.", error);
     marketingMaterial = {
-      bio: text,
+      bio: rawText,
       marketingSnippet: "Professional services available."
     };
   }
 
-  try {
-    await prisma.expert.update({
-      where: { id: expertId },
-      data: {
-        bio: marketingMaterial.bio,
-        marketingSnippet: marketingMaterial.marketingSnippet
-      }
-    });
-    return marketingMaterial;
-  } catch (dbError) {
-    console.error("Database update failed inside generateMarketing:", dbError);
-    throw new Error("Failed to save generated marketing profile to database.");
+  if (expertId) {
+    try {
+      await prisma.expert.update({
+        where: { id: expertId },
+        data: {
+          bio: marketingMaterial.bio,
+          marketingSnippet: marketingMaterial.marketingSnippet
+        }
+      });
+    } catch (dbError) {
+      console.warn("Database update warning inside generateMarketing:", dbError.message);
+    }
   }
+
+  return marketingMaterial;
 };
 
 /**
@@ -398,31 +429,30 @@ const generateFollowUp = async (clientName, topic, notes) => {
  */
 const recommendPricing = async (yearsExperience, subjectExpertise, currentRate) => {
   try {
-    const model = getModel();
+    const model = getModel('gemini-2.5-flash', true);
     const prompt = `
       An expert has the following profile:
-      - Subject Expertise: "${subjectExpertise}"
-      - Years of Experience: ${yearsExperience}
+      - Subject Expertise: "${subjectExpertise || 'Consultant'}"
+      - Years of Experience: ${yearsExperience || 2}
       - Current Rate: ${currentRate ? currentRate + ' INR/hr' : 'Not set'}
 
       Provide a realistic market pricing benchmark and rate recommendation in INR (Indian Rupees).
 
       Return strictly a JSON object:
       {
-        "recommendedPrice": number (e.g. 1500),
-        "priceRange": "minPrice - maxPrice INR",
+        "recommendedPrice": 1500,
+        "priceRange": "1200 - 1800 INR",
         "rationale": "Clear, grounded 2-sentence rationale based on market demand and experience."
       }
-      Do not wrap in markdown \`\`\`json.
     `;
 
     const response = await generateWithRetry(model, prompt);
-    let text = response.text().trim();
-    text = text.replace(/^```json\n/, '').replace(/\n```$/, '').replace(/^```/, '').replace(/```$/, '').trim();
-    return JSON.parse(text);
+    const rawText = response.text();
+    return parseGeminiJson(rawText);
   } catch (error) {
     console.error("recommendPricing failed:", error);
-    const baseRate = Math.max(500, (yearsExperience || 2) * 300);
+    const years = Number(yearsExperience) || 2;
+    const baseRate = Math.max(500, years * 300);
     return {
       recommendedPrice: baseRate,
       priceRange: `${Math.round(baseRate * 0.8)} - ${Math.round(baseRate * 1.3)} INR`,
